@@ -204,6 +204,88 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             traceback.print_exc(file=sys.stderr)
             return [{"error": f"Failed to get all applications: {e!s}"}]
 
+    def _create_imap_tag_filter_expression(self, imap_value: str) -> Dict[str, Any]:
+        """
+        Create a comprehensive tag filter expression for IMAP-based application filtering.
+        
+        This creates a filter that matches services across multiple tag types:
+        - agent.tag with imap key (SOURCE and DESTINATION)
+        - kubernetes.pod.label with applications.cirrus.ibm.com/eal key (SOURCE and DESTINATION)
+        - opentelemetry.tag with imap key (NOT_APPLICABLE)
+        
+        Args:
+            imap_value: The IMAP identifier value (e.g., "EAL-012471")
+            
+        Returns:
+            Dict containing the complete tagFilterExpression structure
+        """
+        return {
+            "type": "EXPRESSION",
+            "logicalOperator": "OR",
+            "elements": [
+                {
+                    "type": "TAG_FILTER",
+                    "name": "agent.tag",
+                    "stringValue": f"imap={imap_value}",
+                    "numberValue": None,
+                    "booleanValue": None,
+                    "floatValue": None,
+                    "key": "imap",
+                    "value": imap_value,
+                    "operator": "EQUALS",
+                    "entity": "DESTINATION"
+                },
+                {
+                    "type": "TAG_FILTER",
+                    "name": "agent.tag",
+                    "stringValue": f"imap={imap_value}",
+                    "numberValue": None,
+                    "booleanValue": None,
+                    "floatValue": None,
+                    "key": "imap",
+                    "value": imap_value,
+                    "operator": "EQUALS",
+                    "entity": "SOURCE"
+                },
+                {
+                    "type": "TAG_FILTER",
+                    "name": "kubernetes.pod.label",
+                    "stringValue": f"applications.cirrus.ibm.com/eal={imap_value}",
+                    "numberValue": None,
+                    "booleanValue": None,
+                    "floatValue": None,
+                    "key": "applications.cirrus.ibm.com/eal",
+                    "value": imap_value,
+                    "operator": "EQUALS",
+                    "entity": "DESTINATION"
+                },
+                {
+                    "type": "TAG_FILTER",
+                    "name": "kubernetes.pod.label",
+                    "stringValue": f"applications.cirrus.ibm.com/eal={imap_value}",
+                    "numberValue": None,
+                    "booleanValue": None,
+                    "floatValue": None,
+                    "key": "applications.cirrus.ibm.com/eal",
+                    "value": imap_value,
+                    "operator": "EQUALS",
+                    "entity": "SOURCE"
+                },
+                {
+                    "type": "TAG_FILTER",
+                    "name": "opentelemetry.tag",
+                    "stringValue": f"imap={imap_value}",
+                    "numberValue": None,
+                    "booleanValue": None,
+                    "floatValue": None,
+                    "key": "imap",
+                    "value": imap_value,
+                    "operator": "EQUALS",
+                    "entity": "NOT_APPLICABLE"
+                }
+            ]
+        }
+
     def _validate_and_prepare_application_payload(self, payload: Union[Dict[str, Any], str]) -> Dict[str, Any]:
         """
         Validate and prepare application configuration payload with proper defaults.
@@ -225,8 +307,8 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         else:
             request_body = payload.copy() if payload else {}
 
-        # Define required fields
-        required_fields = ['label']
+        # Define required fields - BOTH label and imap are required
+        required_fields = ['label', 'imap']
         missing_fields = []
 
         # Check for required fields
@@ -238,8 +320,10 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             return {
                 "error": "Missing required fields for application configuration",
                 "missing_fields": missing_fields,
+                "ai_agent_instruction": "You MUST ask the user for BOTH IMAP identifier AND application label. IMAP is REQUIRED, not optional. The label must start with the IMAP value.",
                 "required_fields": {
-                    "label": "Application perspective name (string, required)",
+                    "imap": "IMAP identifier (string, REQUIRED - auto-generates comprehensive tag filter expression)",
+                    "label": "Application perspective name (string, REQUIRED - must start with IMAP value)",
                 },
                 "optional_fields": {
                     "tagFilterExpression": "Tag filter to match services (dict, optional - defaults to empty EXPRESSION)",
@@ -250,22 +334,21 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
                 "scope_options": ["INCLUDE_ALL_DOWNSTREAM", "INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING", "INCLUDE_NO_DOWNSTREAM"],
                 "boundary_scope_options": ["ALL", "INBOUND", "DEFAULT"],
                 "access_rules_options": ["READ_WRITE_GLOBAL", "READ_ONLY_GLOBAL", "CUSTOM"],
-                "elicitation_prompt": "Please provide the following configuration options:\n1. Scope (INCLUDE_ALL_DOWNSTREAM/INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING/INCLUDE_NO_DOWNSTREAM)\n2. Boundary Scope (ALL/INBOUND/DEFAULT)\n3. Access Rules (READ_WRITE_GLOBAL/READ_ONLY_GLOBAL/CUSTOM)\n4. Tag Filter Expression (optional)",
-                "example_minimal": {
-                    "label": "My Application"
-                },
-                "example_with_options": {
-                    "label": "My Application",
+                "ai_elicitation_flow": [
+                    "1. Ask user: 'What is the IMAP identifier for this application?' (e.g., EAL-012471)",
+                    "2. Ask user: 'What should the application name be?' Suggest format: '{IMAP}_ApplicationName'",
+                    "3. Optionally ask about scope, boundary scope, and access rules (or use defaults)"
+                ],
+                "example_recommended": {
+                    "label": "EAL-012471_MyApplication",
+                    "imap": "EAL-012471",
                     "scope": "INCLUDE_ALL_DOWNSTREAM",
                     "boundaryScope": "ALL",
-                    "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}],
-                    "tagFilterExpression": {
-                        "type": "TAG_FILTER",
-                        "name": "service.name",
-                        "operator": "CONTAINS",
-                        "entity": "DESTINATION",
-                        "value": "my-service"
-                    }
+                    "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}]
+                },
+                "example_minimal": {
+                    "label": "EAL-012471_MyApplication",
+                    "imap": "EAL-012471"
                 }
             }
 
@@ -287,8 +370,33 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             ]
             debug_print("Applied default accessRules: READ_WRITE GLOBAL")
 
-        # If no tagFilterExpression provided, use empty EXPRESSION
-        if 'tagFilterExpression' not in request_body:
+        # Handle IMAP-based tag filter generation
+        # If 'imap' is provided as a top-level field, generate the tag filter expression
+        if 'imap' in request_body and request_body['imap']:
+            imap_value = request_body.pop('imap')  # Remove imap from payload
+            
+            # Validate that label starts with IMAP value
+            label = request_body.get('label', '')
+            if not label.startswith(imap_value):
+                return {
+                    "error": f"Label must start with IMAP value '{imap_value}'",
+                    "validation_failed": True,
+                    "current_label": label,
+                    "required_prefix": imap_value,
+                    "required_format": f"{imap_value}_ApplicationName",
+                    "suggestion": f"Use a label like: '{imap_value}_YourAppName' or '{imap_value}_MC_TST'",
+                    "ai_agent_instruction": f"Please ask the user to provide a label that starts with '{imap_value}'. Suggest format: '{imap_value}_ApplicationName'",
+                    "examples": [
+                        f"{imap_value}_StatusRadar",
+                        f"{imap_value}_MC_TST",
+                        f"{imap_value}_MyApplication"
+                    ]
+                }
+            
+            request_body['tagFilterExpression'] = self._create_imap_tag_filter_expression(imap_value)
+            debug_print(f"Generated IMAP-based tagFilterExpression for imap={imap_value}")
+        # If no tagFilterExpression provided and no imap, use empty EXPRESSION
+        elif 'tagFilterExpression' not in request_body:
             request_body['tagFilterExpression'] = {
                 "type": "EXPRESSION",
                 "logicalOperator": "AND",
@@ -297,35 +405,20 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
             debug_print("Applied default tagFilterExpression: empty EXPRESSION")
 
         # Convert nested tagFilterExpression to model objects if present
+        # Keep as dictionary to preserve all fields including key and value
         if 'tagFilterExpression' in request_body and isinstance(request_body['tagFilterExpression'], dict):
             tag_expr = request_body['tagFilterExpression']
 
             # Handle EXPRESSION type with nested elements
             if tag_expr.get('type') == 'EXPRESSION' and 'elements' in tag_expr:
-                converted_elements = []
-                for element in tag_expr['elements']:
-                    if isinstance(element, dict):
-                        element_copy = element.copy()
-                        element_copy.pop('value', None)
-                        element_copy.pop('key', None)
-                        converted_elements.append(TagFilter(**element_copy))
-                    else:
-                        converted_elements.append(element)
-                tag_expr['elements'] = converted_elements
-                request_body['tagFilterExpression'] = TagFilterExpression(**tag_expr)
+                # Don't convert to model objects - keep as dict to preserve key/value fields
+                # The API requires these fields to be present
+                pass  # Keep the tagFilterExpression as-is
 
             # Handle TAG_FILTER type (simple filter)
             elif tag_expr.get('type') == 'TAG_FILTER':
-                # For TAG_FILTER, ensure both 'value' and 'stringValue' are present
-                # Don't convert to TagFilter model - keep as dict to preserve both fields
-                tag_filter_copy = tag_expr.copy()
-                tag_filter_copy.pop('key', None)
-                if 'stringValue' not in tag_filter_copy and 'value' in tag_expr:
-                    tag_filter_copy['stringValue'] = tag_expr['value']
-                if 'value' not in tag_filter_copy and 'stringValue' in tag_expr:
-                    tag_filter_copy['value'] = tag_expr['stringValue']
-                # Keep as dictionary - don't convert to TagFilter model
-                request_body['tagFilterExpression'] = tag_filter_copy
+                # Keep as dictionary to preserve all fields
+                pass  # Keep the tagFilterExpression as-is
 
         return {"payload": request_body}
 
@@ -337,14 +430,23 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
         """
         Add a new Application Perspective configuration.
 
-        Required fields:
-        - label: Application perspective name
+        REQUIRED fields (BOTH are mandatory):
+        - imap: IMAP identifier (e.g., "EAL-012471") - REQUIRED, auto-generates comprehensive tag filter
+        - label: Application perspective name (REQUIRED) - MUST start with IMAP value
 
         Optional fields (with defaults):
-        - tagFilterExpression: Tag filter (defaults to empty EXPRESSION)
+        - tagFilterExpression: Tag filter (defaults to empty EXPRESSION, ignored if imap is provided)
         - scope: Monitoring scope (defaults to 'INCLUDE_ALL_DOWNSTREAM')
         - boundaryScope: Boundary scope (defaults to 'ALL')
         - accessRules: Access rules (defaults to READ_WRITE GLOBAL)
+        
+        CRITICAL: The label MUST start with the IMAP value.
+        Example: If imap="EAL-012471", label must be "EAL-012471_YourAppName"
+        
+        IMAP is MANDATORY - it automatically generates a tagFilterExpression that matches:
+        - agent.tag with imap key (SOURCE and DESTINATION)
+        - kubernetes.pod.label with applications.cirrus.ibm.com/eal key (SOURCE and DESTINATION)
+        - opentelemetry.tag with imap key (NOT_APPLICABLE)
         """
         try:
             if not payload:
@@ -366,16 +468,42 @@ class ApplicationSettingsMCPTools(BaseInstanaClient):
 
             request_body = validation_result["payload"]
 
+            # Clean up None values from the request body recursively
+            def remove_none_values(obj):
+                if isinstance(obj, dict):
+                    return {k: remove_none_values(v) for k, v in obj.items() if v is not None}
+                elif isinstance(obj, list):
+                    return [remove_none_values(item) for item in obj]
+                else:
+                    return obj
+            
+            request_body = remove_none_values(request_body)
+
             # Debug: Log the request body before creating the config object
-            debug_print(f"DEBUG: request_body before NewApplicationConfig: {request_body}")
+            debug_print(f"DEBUG: request_body before API call: {request_body}")
 
-            config_object = NewApplicationConfig(**request_body)
-
-            # Debug: Log what the config object looks like after creation
-            if hasattr(config_object, 'to_dict'):
-                debug_print(f"DEBUG: config_object.to_dict(): {config_object.to_dict()}")
-
-            result = api_client.add_application_config(new_application_config=config_object)
+            # Use direct HTTP request to preserve tagFilterExpression structure
+            import json
+            import requests
+            
+            # Remove trailing slash from host if present
+            host = api_client.api_client.configuration.host.rstrip('/')
+            url = f"{host}/api/application-monitoring/settings/application"
+            headers = {
+                "Authorization": f"apiToken {api_client.api_client.configuration.api_key['ApiKeyAuth']}",
+                "Content-Type": "application/json"
+            }
+            
+            debug_print(f"DEBUG: Posting to URL: {url}")
+            response = requests.post(url, headers=headers, json=request_body)
+            
+            if response.status_code != 200:
+                debug_print(f"DEBUG: Response status: {response.status_code}")
+                debug_print(f"DEBUG: Response body: {response.text}")
+            
+            response.raise_for_status()
+            
+            result = response.json()
 
             if hasattr(result, 'to_dict'):
                 result_dict = result.to_dict()

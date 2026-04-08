@@ -54,8 +54,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             raise
 
     @register_as_tool(
-        title="Create Log Alert Config",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    title="Create Log Alert Config",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def create_log_alert_config(self, config: Dict[str, Any], ctx=None, api_client=None) -> Dict[str, Any]:
@@ -99,8 +99,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to create log alert configuration: {e!s}"}
 
     @register_as_tool(
-        title="Delete Log Alert Config",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+    title="Delete Log Alert Config",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def delete_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
@@ -129,8 +129,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to delete log alert configuration: {e!s}"}
 
     @register_as_tool(
-        title="Disable Log Alert Config",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    title="Disable Log Alert Config",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def disable_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
@@ -159,8 +159,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to disable log alert configuration: {e!s}"}
 
     @register_as_tool(
-        title="Enable Log Alert Config",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    title="Enable Log Alert Config",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def enable_log_alert_config(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
@@ -189,8 +189,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to enable log alert configuration: {e!s}"}
 
     @register_as_tool(
-        title="Find Active Log Alert Configs",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    title="Find Active Log Alert Configs",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def find_active_log_alert_configs(self, alert_ids: Optional[List[str]] = None, ctx=None, api_client=None) -> Dict[str, Any]:
@@ -231,8 +231,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to find active log alert configurations: {e!s}"}
 
     @register_as_tool(
-        title="Find Log Alert Config",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    title="Find Log Alert Config",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def find_log_alert_config(self, id: str, valid_on: Optional[int] = None, ctx=None, api_client=None) -> Dict[str, Any]:
@@ -274,8 +274,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to find log alert configuration: {e!s}"}
 
     @register_as_tool(
-        title="Find Log Alert Config Versions",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    title="Find Log Alert Config Versions",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def find_log_alert_config_versions(self, id: str, ctx=None, api_client=None) -> Dict[str, Any]:
@@ -316,8 +316,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to find log alert configuration versions: {e!s}"}
 
     @register_as_tool(
-        title="Restore Log Alert Config",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    title="Restore Log Alert Config",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def restore_log_alert_config(self, id: str, created: int, ctx=None, api_client=None) -> Dict[str, Any]:
@@ -350,8 +350,8 @@ class LogAlertConfigurationMCPTools(BaseInstanaClient):
             return {"error": f"Failed to restore log alert configuration: {e!s}"}
 
     @register_as_tool(
-        title="Update Log Alert Config",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    title="Update Log Alert Config",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(LogAlertConfigurationApi)
     async def update_log_alert_config(self, id: str, config: Dict[str, Any], ctx=None, api_client=None) -> Dict[str, Any]:

@@ -72,6 +72,7 @@ class MCPState:
     smart_router_events_client: Any = None
     smart_router_website_client: Any = None
     smart_router_automation_client: Any = None
+    smart_router_synthetic_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     infra_analyze_new_client: Any = None
@@ -237,6 +238,7 @@ def get_client_categories():
         )
         from src.router.events_smart_router_tool import SmartRouterEventsMCPTool
         from src.router.website_smart_router import SmartRouterWebsiteMCPTool
+        from src.router.synthetic_smart_router import SmartRouterSyntheticMCPTool
     except ImportError as e:
         logger.warning(f"Could not import client classes: {e}")
         return {}
@@ -259,6 +261,9 @@ def get_client_categories():
         ],
         "settings": [
             ('smart_router_custom_dashboard_client', CustomDashboardSmartRouterMCPTool),
+        ],
+        "synthetic": [
+            ('smart_router_synthetic_client', SmartRouterSyntheticMCPTool),
         ]
     }
 
@@ -287,6 +292,8 @@ def get_prompt_categories():
             WebsiteConfigurationPrompts,
         )
         from src.prompts.website.website_metrics import WebsiteMetricsPrompts
+        from src.prompts.synthetic.synthetic_setting import SyntheticMonitoringPrompts
+        from src.prompts.synthetic.synthetic_tools import SyntheticToolsPrompts
     except ImportError as e:
         logger.warning(f"Could not import prompt classes: {e}")
         return {}
@@ -303,6 +310,8 @@ def get_prompt_categories():
     website_catalog_prompts = WebsiteCatalogPrompts.get_prompts()
     website_configuration_prompts = WebsiteConfigurationPrompts.get_prompts()
     website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
+    synthetic_setting_prompts = SyntheticMonitoringPrompts.get_prompts()
+    synthetic_tools_prompts = SyntheticToolsPrompts.get_prompts()
 
     return {
         "app": [
@@ -323,6 +332,10 @@ def get_prompt_categories():
         ],
         "settings": [
             ("Custom Dashboard", custom_dashboard_prompts),
+        ],
+        "synthetic": [
+            ("Synthetic Monitoring Settings", synthetic_setting_prompts),
+            ("Synthetic Monitoring Tools", synthetic_tools_prompts),
         ]
     }
 
@@ -380,7 +393,7 @@ def main():
             "--tools",
             type=str,
             metavar='<categories>',
-            help="Comma-separated list of tool categories to enable (--tools router,infra,app,events,automation,website,settings). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled. Use 'router' for smart routing across app and infra metrics."
+            help="Comma-separated list of tool categories to enable (--tools app,infra,events,automation,website,settings,synthetic). Also controls which prompts are enabled. If not provided, all tools and prompts are enabled."
         )
         parser.add_argument(
             "--list-tools",
@@ -437,7 +450,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "settings"}
+        all_categories = {"app", "infra", "events", "automation", "website", "settings", "synthetic"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -465,7 +478,7 @@ def main():
                 enabled = set(all_categories)
 
         if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, website, settings")
+            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, website, settings, synthetic")
             sys.exit(2)
 
         # Print enabled tools for user information

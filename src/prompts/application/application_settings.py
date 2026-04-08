@@ -21,6 +21,7 @@ class ApplicationSettingsPrompts:
     @auto_register_prompt
     @staticmethod
     def create_application_config(
+        imap: str,
         label: str,
         scope: Optional[str] = None,
         boundary_scope: Optional[str] = None,
@@ -28,42 +29,17 @@ class ApplicationSettingsPrompts:
         tag_filter_expression: Optional[dict] = None
     ) -> str:
         """
-        Create a new Application Perspective configuration with user-provided settings.
-
-        REQUIRED:
-        - label: Application perspective name (string)
-
-        OPTIONAL (will prompt user if not provided):
-        - scope: Monitoring scope
-          Options: "INCLUDE_ALL_DOWNSTREAM" (default), "INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING", "INCLUDE_NO_DOWNSTREAM"
-        - boundary_scope: Boundary scope
-          Options: "ALL" (default), "INBOUND", "DEFAULT"
-        - access_rules: Access control rules
-          Options: "READ_WRITE_GLOBAL" (default), "READ_ONLY_GLOBAL", "CUSTOM"
-        - tag_filter_expression: Tag filter to match services (optional)
-
-        ELICITATION QUESTIONS:
-        1. What scope should be used for monitoring? (INCLUDE_ALL_DOWNSTREAM/INCLUDE_IMMEDIATE_DOWNSTREAM_DATABASE_AND_MESSAGING/INCLUDE_NO_DOWNSTREAM)
-        2. What boundary scope should be applied? (ALL/INBOUND/DEFAULT)
-        3. What access rules should be configured? (READ_WRITE_GLOBAL/READ_ONLY_GLOBAL/CUSTOM)
-        4. Do you want to add a tag filter expression to match specific services? (yes/no)
-
-        Example with all options:
-        {
-            "label": "My Application",
-            "scope": "INCLUDE_ALL_DOWNSTREAM",
-            "boundaryScope": "ALL",
-            "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}],
-            "tagFilterExpression": {
-                "type": "TAG_FILTER",
-                "name": "service.name",
-                "operator": "CONTAINS",
-                "entity": "DESTINATION",
-                "value": "my-service"
-            }
-        }
+        Create Application Perspective. REQUIRED: IMAP identifier + label (label must start with IMAP).
+        
+        YOU MUST ASK FOR:
+        1. IMAP identifier (e.g., "EAL-012471")
+        2. Application name (must start with IMAP, e.g., "EAL-012471_MyApp")
+        
+        Example: imap="EAL-012471", label="EAL-012471_StatusRadar"
+        
+        Other parameters (scope, boundaryScope, accessRules) use defaults - don't ask unless user specifies.
         """
-        config_details = [f"label: {label}"]
+        config_details = [f"imap: {imap}", f"label: {label}"]
         if scope:
             config_details.append(f"scope: {scope}")
         if boundary_scope:

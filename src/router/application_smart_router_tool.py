@@ -52,11 +52,44 @@ class SmartRouterMCPTool(BaseInstanaClient):
         self,
         resource_type: str,
         operation: str,
-        params: Optional[Dict[str, Any]] = None,
+        # Flat parameters for Watson Orchestrate compatibility - ALL AS STRINGS
+        # Settings parameters (for create application)
+        imap: Optional[str] = None,
+        label: Optional[str] = None,
+        scope: Optional[str] = None,
+        boundary_scope: Optional[str] = None,
+        access_rules: Optional[str] = None,
+        tag_filter_expression: Optional[str] = None,
+        # Common parameters
+        resource_subtype: Optional[str] = None,
+        id: Optional[str] = None,
+        application_id: Optional[str] = None,
+        application_name: Optional[str] = None,
+        payload: Optional[str] = None,
+        request_body: Optional[str] = None,
+        # Alert config parameters
+        alert_ids: Optional[str] = None,
+        valid_on: Optional[str] = None,
+        created: Optional[str] = None,
+        # Metrics parameters
+        query: Optional[str] = None,
+        time_frame: Optional[str] = None,
+        metrics: Optional[str] = None,
+        group: Optional[str] = None,
+        order: Optional[str] = None,
+        pagination: Optional[str] = None,
+        include_internal: Optional[str] = None,
+        include_synthetic: Optional[str] = None,
+        # Catalog parameters
+        use_case: Optional[str] = None,
+        data_source: Optional[str] = None,
+        var_from: Optional[str] = None,
         ctx=None
     ) -> Dict[str, Any]:
         """
         Unified Instana application resource manager for metrics, alerts, configurations, and catalog.
+
+        ALL PARAMETERS ARE FLAT STRINGS - No nested objects required!
 
         Resource Types:
         - "metrics": Query application metrics, services, and endpoints
@@ -67,91 +100,113 @@ class SmartRouterMCPTool(BaseInstanaClient):
 
         METRICS (resource_type="metrics"):
             operation: "application"
-            params: {query, time_frame, metrics, tag_filter_expression, group, order, pagination, include_internal, include_synthetic}
-
-            List services: group={"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
-            List endpoints: group={"groupbyTag": "endpoint.name", "groupbyTagEntity": "DESTINATION"}
+            Parameters (all strings): query, time_frame, metrics, tag_filter_expression, group, order, pagination, include_internal, include_synthetic
 
         ALERT_CONFIG (resource_type="alert_config"):
             operations: find_active, find_versions, find, create, update, delete, enable, disable, restore, update_baseline
-            params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
-            Note: Provide application_name (auto-resolved to ID) or application_id
+            Parameters (all strings): application_id OR application_name, id, alert_ids, valid_on, created, payload
 
         GLOBAL_ALERT_CONFIG (resource_type="global_alert_config"):
             operations: find_active, find_versions, find, create, update, delete, enable, disable, restore
-            params: {application_id OR application_name, id, alert_ids, valid_on, created, payload}
-            Note: Provide application_name (auto-resolved to ID) or application_id
+            Parameters (all strings): application_id OR application_name, id, alert_ids, valid_on, created, payload
 
         SETTINGS (resource_type="settings"):
             operations: get_all, get, create, update, delete, order, replace_all
-            params: {resource_subtype, id, application_name, payload, request_body}
+            Parameters (all strings): resource_subtype, id, application_name, imap, label, scope, boundary_scope, access_rules, tag_filter_expression, payload, request_body
 
             resource_subtypes: "application", "endpoint", "service", "manual_service"
 
             Creating application perspectives (resource_subtype="application", operation="create"):
-            - REQUIRED: label (application name)
-            - OPTIONAL: scope (default: INCLUDE_ALL_DOWNSTREAM), boundaryScope (default: ALL),
-                       accessRules (default: READ_WRITE_GLOBAL), tagFilterExpression
-
-            Minimal example:
-            params={"resource_subtype": "application", "payload": {"label": "My App"}}
-
-            Full example:
-            params={
-                "resource_subtype": "application",
-                "payload": {
-                    "label": "My App",
-                    "scope": "INCLUDE_ALL_DOWNSTREAM",
-                    "boundaryScope": "ALL",
-                    "accessRules": [{"accessType": "READ_WRITE", "relationType": "GLOBAL"}],
-                    "tagFilterExpression": {"type": "TAG_FILTER", "name": "service.name", "operator": "CONTAINS", "entity": "DESTINATION", "value": "my-service"}
-                }
-            }
+            - REQUIRED: imap (IMAP identifier string, e.g., "EAL-012471")
+            - REQUIRED: label (application name string, MUST start with IMAP, e.g., "EAL-012471_MyApp")
+            - OPTIONAL: scope (string, default: "INCLUDE_ALL_DOWNSTREAM")
+            - OPTIONAL: boundary_scope (string, default: "ALL")
+            - OPTIONAL: access_rules (JSON string, default: '[{"accessType": "READ_WRITE", "relationType": "GLOBAL"}]')
 
         CATALOG (resource_type="catalog"):
             operations: get_tag_catalog, get_metric_catalog
-            params: {use_case, data_source, var_from}
-
-            Get tag catalog: operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
-            Get metric catalog: operation="get_metric_catalog"
+            Parameters (all strings): use_case, data_source, var_from
 
         Args:
             resource_type: "metrics", "alert_config", "global_alert_config", "settings", or "catalog"
             operation: Specific operation for the resource type
-            params: Operation-specific parameters (optional)
+            All other parameters are optional strings, operation-specific
             ctx: MCP context (internal)
 
         Returns:
             Dictionary with results from the appropriate tool
 
         Examples:
-            # List services
-            resource_type="metrics", operation="application", params={
-                "tag_filter_expression": {"type": "TAG_FILTER", "name": "application.name", "operator": "EQUALS", "entity": "DESTINATION", "value": "All Services"},
-                "group": {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"}
-            }
+            # Create application perspective (flat parameters)
+            resource_type="settings", operation="create",
+            resource_subtype="application", imap="EAL-012471", label="EAL-012471_MyApp"
 
             # Find active alerts by name
-            resource_type="alert_config", operation="find_active", params={"application_name": "All Services"}
+            resource_type="alert_config", operation="find_active", application_name="All Services"
 
             # Get application config by name
-            resource_type="settings", operation="get", params={"resource_subtype": "application", "application_name": "MCP_TEST_DEMO"}
-
-            # Create application perspective
-            resource_type="settings", operation="create", params={"resource_subtype": "application", "payload": {"label": "My App"}}
+            resource_type="settings", operation="get", resource_subtype="application", application_name="MCP_TEST_DEMO"
 
             # Get application tag catalog
-            resource_type="catalog", operation="get_tag_catalog", params={"use_case": "GROUPING", "data_source": "CALLS"}
-
-            # Get application metric catalog
-            resource_type="catalog", operation="get_metric_catalog"
+            resource_type="catalog", operation="get_tag_catalog", use_case="GROUPING", data_source="CALLS"
         """
         try:
             logger.info(f"Smart Router received: resource_type={resource_type}, operation={operation}")
 
-            # Initialize params if not provided
-            if params is None:
-                params = {}
+            # Build params dict from flat parameters
+            params = {}
+            if imap is not None:
+                params['imap'] = imap
+            if label is not None:
+                params['label'] = label
+            if scope is not None:
+                params['scope'] = scope
+            if boundary_scope is not None:
+                params['boundary_scope'] = boundary_scope
+            if access_rules is not None:
+                params['access_rules'] = access_rules
+            if tag_filter_expression is not None:
+                params['tag_filter_expression'] = tag_filter_expression
+            if resource_subtype is not None:
+                params['resource_subtype'] = resource_subtype
+            if id is not None:
+                params['id'] = id
+            if application_id is not None:
+                params['application_id'] = application_id
+            if application_name is not None:
+                params['application_name'] = application_name
+            if payload is not None:
+                params['payload'] = payload
+            if request_body is not None:
+                params['request_body'] = request_body
+            if alert_ids is not None:
+                params['alert_ids'] = alert_ids
+            if valid_on is not None:
+                params['valid_on'] = valid_on
+            if created is not None:
+                params['created'] = created
+            if query is not None:
+                params['query'] = query
+            if time_frame is not None:
+                params['time_frame'] = time_frame
+            if metrics is not None:
+                params['metrics'] = metrics
+            if group is not None:
+                params['group'] = group
+            if order is not None:
+                params['order'] = order
+            if pagination is not None:
+                params['pagination'] = pagination
+            if include_internal is not None:
+                params['include_internal'] = include_internal
+            if include_synthetic is not None:
+                params['include_synthetic'] = include_synthetic
+            if use_case is not None:
+                params['use_case'] = use_case
+            if data_source is not None:
+                params['data_source'] = data_source
+            if var_from is not None:
+                params['var_from'] = var_from
 
             # Validate resource_type
             if resource_type not in ["metrics", "alert_config", "global_alert_config", "settings", "catalog"]:
@@ -378,6 +433,51 @@ class SmartRouterMCPTool(BaseInstanaClient):
         application_name = params.get("application_name")
         payload = params.get("payload")
         request_body = params.get("request_body")
+        
+        # For create operation with flat parameters, build payload from individual fields
+        if operation == "create" and resource_subtype == "application":
+            # Check if we have flat parameters (imap, label) instead of payload
+            imap = params.get("imap")
+            label = params.get("label")
+            
+            if imap or label:
+                # Build payload from flat parameters
+                payload_dict = {}
+                if imap:
+                    payload_dict["imap"] = imap
+                if label:
+                    payload_dict["label"] = label
+                
+                # Add optional parameters if provided
+                if params.get("scope"):
+                    payload_dict["scope"] = params.get("scope")
+                if params.get("boundary_scope"):
+                    payload_dict["boundaryScope"] = params.get("boundary_scope")
+                if params.get("access_rules"):
+                    # Parse access_rules if it's a JSON string
+                    access_rules = params.get("access_rules")
+                    if isinstance(access_rules, str):
+                        try:
+                            import json
+                            payload_dict["accessRules"] = json.loads(access_rules)
+                        except:
+                            payload_dict["accessRules"] = access_rules
+                    else:
+                        payload_dict["accessRules"] = access_rules
+                if params.get("tag_filter_expression"):
+                    # Parse tag_filter_expression if it's a JSON string
+                    tag_filter = params.get("tag_filter_expression")
+                    if isinstance(tag_filter, str):
+                        try:
+                            import json
+                            payload_dict["tagFilterExpression"] = json.loads(tag_filter)
+                        except:
+                            payload_dict["tagFilterExpression"] = tag_filter
+                    else:
+                        payload_dict["tagFilterExpression"] = tag_filter
+                
+                payload = payload_dict
+                logger.info(f"Built payload from flat parameters: {payload}")
 
         # Validate resource_subtype
         valid_subtypes = ["application", "endpoint", "service", "manual_service"]

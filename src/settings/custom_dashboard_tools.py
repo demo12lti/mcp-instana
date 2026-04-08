@@ -37,8 +37,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
         super().__init__(read_token=read_token, base_url=base_url)
 
     @register_as_tool(
-        title="Get Custom Dashboards",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    title="Get Custom Dashboards",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(CustomDashboardsApi)
     async def get_custom_dashboards(self,
@@ -95,8 +95,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get custom dashboards: {e!s}"}
 
     @register_as_tool(
-        title="Get Custom Dashboard",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    title="Get Custom Dashboard",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(CustomDashboardsApi)
     async def get_custom_dashboard(self,
@@ -146,8 +146,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get custom dashboard: {e!s}"}
 
     @register_as_tool(
-        title="Add Custom Dashboard",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    title="Add Custom Dashboard",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(CustomDashboardsApi)
     async def add_custom_dashboard(self,
@@ -204,8 +204,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             return {"error": f"Failed to add custom dashboard: {e!s}"}
 
     @register_as_tool(
-        title="Update Custom Dashboard",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+    title="Update Custom Dashboard",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
     )
     @with_header_auth(CustomDashboardsApi)
     async def update_custom_dashboard(self,
@@ -266,8 +266,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             return {"error": f"Failed to update custom dashboard: {e!s}"}
 
     @register_as_tool(
-        title="Delete Custom Dashboard",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+    title="Delete Custom Dashboard",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True)
     )
     @with_header_auth(CustomDashboardsApi)
     async def delete_custom_dashboard(self,
@@ -316,8 +316,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             return {"error": f"Failed to delete custom dashboard: {e!s}"}
 
     @register_as_tool(
-        title="Get Shareable Users",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    title="Get Shareable Users",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(CustomDashboardsApi)
     async def get_shareable_users(self,
@@ -378,8 +378,8 @@ class CustomDashboardMCPTools(BaseInstanaClient):
             return {"error": f"Failed to get shareable users: {e!s}"}
 
     @register_as_tool(
-        title="Get Shareable API Tokens",
-        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
+    title="Get Shareable API Tokens",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False)
     )
     @with_header_auth(CustomDashboardsApi)
     async def get_shareable_api_tokens(self,
