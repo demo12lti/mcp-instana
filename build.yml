@@ -1,0 +1,21 @@
+apiVersion: automation.cio/v1alpha1
+kind: RepositoryConfig
+ealImapNumber: EAL-011705  
+build:
+  strategy: container-release
+  pipeline: python-v312-micropipenv-container-image
+  version: v1
+  config:
+    cirrus-pipeline-name: mcp-instana
+    service-port: "8080"
+    cirrus-project-name: mcp-instana-server
+    cirrus-region: wdc-containers
+release:
+  environments:
+    - name: test
+    - name: pre-production
+    - name: production
+notifications: 
+  slackChannel: cio-monitoring-cicd-alerts
+
+# Made with Bob

@@ -1,0 +1,19 @@
+apiVersion: cirrus.ibm.com/v1alpha1
+kind: Application
+metadata:
+  name: mcp-instana
+spec:
+  envFrom:
+    - secretRef:
+        name: mcp-instana-config
+    - secretRef:
+        name: instana-credentials
+  env:
+    - name: PORT
+      value: "8080"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+  replicas: 3
+  quota: q512mb
+
+# Made with Bob
