@@ -73,6 +73,7 @@ class MCPState:
     smart_router_website_client: Any = None
     smart_router_automation_client: Any = None
     smart_router_synthetic_client: Any = None
+    smart_router_maintenance_window_client: Any = None
 
     # Infrastructure - Only the new two-pass elicitation tool
     infra_analyze_new_client: Any = None
@@ -237,6 +238,7 @@ def get_client_categories():
             CustomDashboardSmartRouterMCPTool,
         )
         from src.router.events_smart_router_tool import SmartRouterEventsMCPTool
+        from src.router.maintenance_window_smart_router import MaintenanceWindowSmartRouterMCPTool
         from src.router.website_smart_router import SmartRouterWebsiteMCPTool
         from src.router.synthetic_smart_router import SmartRouterSyntheticMCPTool
     except ImportError as e:
@@ -264,6 +266,9 @@ def get_client_categories():
         ],
         "synthetic": [
             ('smart_router_synthetic_client', SmartRouterSyntheticMCPTool),
+        ],
+        "maintenance": [
+            ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
         ]
     }
 
