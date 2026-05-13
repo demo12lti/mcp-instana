@@ -94,99 +94,142 @@ class MaintenanceWindowSmartRouterMCPTool(BaseInstanaClient):
     async def manage_maintenance_windows(
         self,
         operation: str,
-        params: Optional[Dict[str, Any]] = None,
+        application_id: Optional[str] = None,
+        application_ids: Optional[list] = None,
+        imap_code: Optional[str] = None,
+        imap_codes: Optional[list] = None,
+        window_id: Optional[str] = None,
+        start_time: Optional[Any] = None,
+        end_time: Optional[Any] = None,
+        duration_minutes: Optional[Any] = None,
+        duration_hours: Optional[Any] = None,
+        duration_days: Optional[Any] = None,
+        reason: Optional[str] = None,
+        template: Optional[str] = None,
+        change_request_id: Optional[str] = None,
+        affected_services: Optional[list] = None,
+        notification_channels: Optional[list] = None,
+        completion_notes: Optional[str] = None,
+        use_tag_filter_expression: Optional[bool] = False,
+        tag_name: Optional[str] = None,
+        rrule: Optional[str] = None,
+        until_date: Optional[str] = None,
         ctx=None
     ) -> Dict[str, Any]:
         """
         Unified Instana maintenance window manager for lifecycle management.
-
-        Operations:
-        - "create": Create a new maintenance window
-        - "modify": Modify an existing maintenance window
-        - "close": Close and document a maintenance window
-        - "list_active": List all active maintenance windows
-        - "list_scheduled": List all scheduled maintenance windows
-        - "list_all": List all maintenance windows (active, scheduled, and expired)
-        - "list_expired": List all expired maintenance windows
-        - "bulk_create": Create maintenance windows for multiple applications
-        - "validate": Validate maintenance window parameters without creating
-        - "get_templates": Retrieve available maintenance window templates
-
-        Parameters (params dict):
-        - application_id: Single application ID (legacy support, treated as IMAP code)
-        - application_ids: Multiple application IDs for bulk operations
-        - imap_code: Single IMAP code (e.g., EAL-012512, ORZ-000012)
-        - imap_codes: Multiple IMAP codes for bulk operations
-        - window_id: Existing maintenance window ID (for modify/close operations)
-        - start_time: Start time in Unix timestamp milliseconds
-        - end_time: End time in Unix timestamp milliseconds
-        - duration_minutes: Duration in minutes
-        - duration_hours: Duration in hours
-        - duration_days: Duration in days
-        - reason: Reason for maintenance window
-        - template: Predefined template name (deployment, database_migration, etc.)
-        - change_request_id: ServiceNow change request ID
-        - affected_services: List of affected service names
-        - notification_channels: List of notification channels
-        - completion_notes: Notes for window closure
-        - use_tag_filter_expression: Use tag filter expression format
-        - tag_name: Tag name for filter expression
-        - rrule: Recurrence rule for recurring windows
-        - until_date: End date for recurring windows
+        
+        IMPORTANT: The 'operation' parameter is REQUIRED and must be one of:
+        - "create" - Create a new maintenance window
+        - "modify" - Modify an existing maintenance window
+        - "close" - Close and document a maintenance window
+        - "list_active" - List all active maintenance windows
+        - "list_scheduled" - List all scheduled maintenance windows
+        - "list_all" - List all maintenance windows (active, scheduled, and expired)
+        - "list_expired" - List all expired maintenance windows
+        - "bulk_create" - Create maintenance windows for multiple applications
+        - "validate" - Validate maintenance window parameters without creating
+        - "get_templates" - Retrieve available maintenance window templates
 
         Args:
-            operation: Operation to perform
-            params: Operation-specific parameters (optional)
+            operation: (REQUIRED) The operation to perform. Must be one of: create, modify, close, list_active, list_scheduled, list_all, list_expired, bulk_create, validate, get_templates
+            application_id: Single application ID (legacy support, treated as IMAP code)
+            application_ids: Multiple application IDs for bulk operations
+            imap_code: Single IMAP code (e.g., EAL-012512, ORZ-000012, MUR-123456)
+            imap_codes: Multiple IMAP codes for bulk operations
+            window_id: Existing maintenance window ID (for modify/close operations)
+            start_time: Start time (Unix timestamp in ms, ISO string, or natural language like "in 2 hours")
+            end_time: End time (Unix timestamp in ms, ISO string, or natural language)
+            duration_minutes: Duration in minutes (integer or string like "120" or "2 hours")
+            duration_hours: Duration in hours (integer or string)
+            duration_days: Duration in days (integer or string)
+            reason: Reason for maintenance window
+            template: Predefined template name (deployment, database_migration, etc.)
+            change_request_id: ServiceNow change request ID
+            affected_services: List of affected service names
+            notification_channels: List of notification channels
+            completion_notes: Notes for window closure
+            use_tag_filter_expression: Use tag filter expression format
+            tag_name: Tag name for filter expression
+            rrule: Recurrence rule for recurring windows
+            until_date: End date for recurring windows
             ctx: MCP context (internal)
 
         Returns:
             Dictionary with results from the appropriate tool
 
         Examples:
-            # Create maintenance window
-            operation="create", params={
+            # Example 1: Create maintenance window with natural language time
+            {
+                "operation": "create",
                 "imap_code": "EAL-012471",
-                "start_time": 1709020800000,
-                "duration_minutes": 120,
+                "start_time": "in 2 hours",
+                "duration_minutes": "120",
                 "template": "deployment"
             }
 
-            # Modify window duration
-            operation="modify", params={
+            # Example 2: Create with ISO timestamp
+            {
+                "operation": "create",
+                "imap_code": "EAL-012471",
+                "start_time": "2026-04-18T14:00:00Z",
+                "duration_minutes": 120,
+                "reason": "Scheduled deployment"
+            }
+
+            # Example 3: Create recurring maintenance window
+            {
+                "operation": "create",
+                "imap_code": "ORZ-000012",
+                "start_time": "in 3 hours",
+                "duration_minutes": 30,
+                "rrule": "FREQ=DAILY;INTERVAL=1",
+                "until_date": "2026-05-17T23:59:59Z"
+            }
+
+            # Example 4: List all active windows
+            {
+                "operation": "list_active"
+            }
+
+            # Example 5: List windows for specific application
+            {
+                "operation": "list_active",
+                "imap_code": "EAL-012471"
+            }
+
+            # Example 6: Modify window duration
+            {
+                "operation": "modify",
                 "window_id": "mw-789",
                 "duration_minutes": 60
             }
 
-            # Modify window recurrence
-            operation="modify", params={
-                "window_id": "mw-789",
-                "until_date": "2026-03-18T23:59:59Z"
-            }
-
-            # Close window
-            operation="close", params={
+            # Example 7: Close window with notes
+            {
+                "operation": "close",
                 "window_id": "mw-789",
                 "completion_notes": "Completed successfully"
             }
 
-            # List all windows
-            operation="list_all"
-
-            # List active windows
-            operation="list_active"
-
-            # List scheduled windows
-            operation="list_scheduled"
-
-            # List expired windows
-            operation="list_expired"
+            # Example 8: Get available templates
+            {
+                "operation": "get_templates"
+            }
         """
         try:
-            logger.info(f"Maintenance Window Router received: operation={operation}")
-
-            # Initialize params if not provided
-            if params is None:
-                params = {}
+            logger.info(f"=== Maintenance Window Router START ===")
+            logger.info(f"Operation: {operation}")
+            logger.info(f"application_id: {application_id}")
+            logger.info(f"imap_code: {imap_code}")
+            logger.info(f"start_time: {start_time}")
+            logger.info(f"template: {template}")
+            
+            # Log recurrence parameters if provided
+            if rrule:
+                logger.info(f"🔁 RECURRING WINDOW - Router received:")
+                logger.info(f"  - rrule: {rrule}")
+                logger.info(f"  - until_date: {until_date}")
 
             # Validate operation
             if operation not in VALID_OPERATIONS:
@@ -195,28 +238,6 @@ class MaintenanceWindowSmartRouterMCPTool(BaseInstanaClient):
                     "error": f"Invalid operation '{operation}'",
                     "valid_operations": VALID_OPERATIONS
                 }
-
-            # Extract parameters using constants
-            application_id = params.get(PARAM_APPLICATION_ID)
-            application_ids = params.get(PARAM_APPLICATION_IDS)
-            imap_code = params.get(PARAM_IMAP_CODE)
-            imap_codes = params.get(PARAM_IMAP_CODES)
-            window_id = params.get(PARAM_WINDOW_ID)
-            start_time = params.get(PARAM_START_TIME)
-            end_time = params.get(PARAM_END_TIME)
-            duration_minutes = params.get(PARAM_DURATION_MINUTES)
-            duration_hours = params.get(PARAM_DURATION_HOURS)
-            duration_days = params.get(PARAM_DURATION_DAYS)
-            reason = params.get(PARAM_REASON)
-            template = params.get(PARAM_TEMPLATE)
-            change_request_id = params.get(PARAM_CHANGE_REQUEST_ID)
-            affected_services = params.get(PARAM_AFFECTED_SERVICES)
-            notification_channels = params.get(PARAM_NOTIFICATION_CHANNELS)
-            completion_notes = params.get(PARAM_COMPLETION_NOTES)
-            use_tag_filter_expression = params.get(PARAM_USE_TAG_FILTER_EXPRESSION, False)
-            tag_name = params.get(PARAM_TAG_NAME)
-            rrule = params.get(PARAM_RRULE)
-            until_date = params.get(PARAM_UNTIL_DATE)
 
             # Route to the maintenance window client
             logger.info(f"Routing to Maintenance Window client for operation: {operation}")
@@ -246,6 +267,9 @@ class MaintenanceWindowSmartRouterMCPTool(BaseInstanaClient):
                 ctx=ctx
             )
 
+            logger.info(f"Result from maintenance_window_client: {result}")
+            logger.info(f"=== Maintenance Window Router END ===")
+
             return {
                 "operation": operation,
                 "results": result
@@ -258,4 +282,4 @@ class MaintenanceWindowSmartRouterMCPTool(BaseInstanaClient):
                 "operation": operation
             }
 
-# Made with Bob
+

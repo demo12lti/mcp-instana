@@ -98,14 +98,48 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         """
         try:
             logger.debug(f"get_grouped_calls_metrics called with metrics={metrics}, group={group}")
+            import json
 
-            # Two-Pass Elicitation: Check for required and recommended parameters
+            # Two-Pass Elicitation: only require explicit metrics.
+            # time_frame and group have safe defaults below and should not block health/summary flows.
             elicitation_request = self._check_elicitation_for_call_group_metrics(
                 metrics, time_frame, group
             )
             if elicitation_request:
                 logger.info("Elicitation needed for call group metrics")
                 return elicitation_request
+
+            # Normalize WO/stringified inputs before building SDK request objects
+            if isinstance(metrics, str):
+                try:
+                    metrics = json.loads(metrics)
+                except json.JSONDecodeError:
+                    logger.warning(f"Unable to parse metrics string as JSON: {metrics}")
+            if isinstance(time_frame, str):
+                try:
+                    time_frame = json.loads(time_frame)
+                except json.JSONDecodeError:
+                    logger.warning(f"Unable to parse time_frame string as JSON: {time_frame}")
+            if isinstance(group, str):
+                try:
+                    group = json.loads(group)
+                except json.JSONDecodeError:
+                    logger.warning(f"Unable to parse group string as JSON: {group}")
+            if isinstance(tag_filter_expression, str):
+                try:
+                    tag_filter_expression = json.loads(tag_filter_expression)
+                except json.JSONDecodeError:
+                    logger.warning(f"Unable to parse tag_filter_expression string as JSON: {tag_filter_expression}")
+            if isinstance(order, str):
+                try:
+                    order = json.loads(order)
+                except json.JSONDecodeError:
+                    logger.warning(f"Unable to parse order string as JSON: {order}")
+            if isinstance(pagination, str):
+                try:
+                    pagination = json.loads(pagination)
+                except json.JSONDecodeError:
+                    logger.warning(f"Unable to parse pagination string as JSON: {pagination}")
 
             # Set default time range if not provided
             if not time_frame:
@@ -471,7 +505,8 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
         """
         missing_params = []
 
-        # Check for REQUIRED parameters
+        # Check only REQUIRED parameters.
+        # group and time_frame already default safely in get_grouped_calls_metrics().
         if not metrics:
             missing_params.append({
                 "name": "metrics",
@@ -485,34 +520,6 @@ class ApplicationCallGroupMCPTools(BaseInstanaClient):
                 "type": "list"
             })
 
-        # Check for RECOMMENDED parameters
-        if not time_frame:
-            missing_params.append({
-                "name": "time_frame",
-                "description": "Time range for metrics (RECOMMENDED)",
-                "examples": [
-                    {"windowSize": 3600000},  # Last hour
-                    {"windowSize": 86400000},  # Last 24 hours
-                    {"to": 1688366990000, "windowSize": 600000}  # Specific time
-                ],
-                "type": "dict",
-                "note": "If not provided, defaults to last hour"
-            })
-
-        if not group:
-            missing_params.append({
-                "name": "group",
-                "description": "Grouping configuration (RECOMMENDED)",
-                "examples": [
-                    {"groupbyTag": "service.name", "groupbyTagEntity": "DESTINATION"},
-                    {"groupbyTag": "endpoint.name", "groupbyTagEntity": "DESTINATION"},
-                    {"groupbyTag": "call.type", "groupbyTagEntity": "NOT_APPLICABLE"}
-                ],
-                "type": "dict",
-                "note": "If not provided, defaults to grouping by service.name"
-            })
-
-        # If any required or recommended parameters are missing, return elicitation request
         if missing_params:
             return self._create_elicitation_request(missing_params)
 

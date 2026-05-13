@@ -4,6 +4,7 @@ Base Instana API Client Module
 This module provides the base client for interacting with the Instana API.
 """
 
+import os
 import sys
 from functools import wraps
 from typing import Any, Callable, Dict, Union
@@ -129,6 +130,7 @@ def with_header_auth(api_class, allow_mock=True):
                         configuration.host = instana_base_url
                         configuration.api_key['ApiKeyAuth'] = instana_token
                         configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
+                        configuration.verify_ssl = False
 
                         api_client_instance = ApiClient(configuration=configuration)
                         user_agent_value = f"MCP-server/{__version__}"
@@ -183,6 +185,7 @@ def with_header_auth(api_class, allow_mock=True):
                     configuration.host = self.base_url
                     configuration.api_key['ApiKeyAuth'] = self.read_token
                     configuration.api_key_prefix['ApiKeyAuth'] = 'apiToken'
+                    configuration.verify_ssl = False
                     api_client_instance = ApiClient(configuration=configuration)
                     # Set User-Agent header instead of User-Agent
                     user_agent_value = f"MCP-server/{__version__}"

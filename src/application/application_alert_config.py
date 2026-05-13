@@ -304,52 +304,65 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
 
             # Call the find_active_application_alert_configs method from the SDK
             logger.debug(f"Calling find_active_application_alert_configs with application_id={application_id}, alert_ids={alert_ids}")
-            response = api_client.find_active_application_alert_configs_without_preload_content(
-                application_id=application_id,
-                alert_ids=alert_ids
-            )
 
-            import json
+            if hasattr(api_client, "find_active_application_alert_configs_without_preload_content"):
+                response = api_client.find_active_application_alert_configs_without_preload_content(
+                    application_id=application_id,
+                    alert_ids=alert_ids
+                )
 
-            raw_data = response.data.decode('utf-8')
-            logger.debug(f"Raw data: {raw_data}")
+                import json
 
-            try:
-                result = json.loads(raw_data)
-                logger.debug(f"Parsed JSON result: {result}")
+                raw_data = response.data.decode('utf-8')
+                logger.debug(f"Raw data: {raw_data}")
 
-                if isinstance(result, list):
-                    configs = result
-                else:
-                    configs = [result] if result else []
+                try:
+                    result = json.loads(raw_data)
+                except json.JSONDecodeError as e:
+                    error_msg = f"Failed to parse response JSON: {e}"
+                    logger.error(error_msg)
+                    return {"error": error_msg}
+            elif hasattr(api_client, "find_active_application_alert_configs"):
+                logger.warning("SDK method find_active_application_alert_configs_without_preload_content not available, using standard SDK method")
+                result = api_client.find_active_application_alert_configs(
+                    application_id=application_id,
+                    alert_ids=alert_ids
+                )
+                if hasattr(result, "to_dict"):
+                    result = result.to_dict()
+            else:
+                logger.warning("SDK does not expose active application alert config lookup methods; returning empty result")
+                result = []
 
-                # Limit to first 10 results
-                total_count = len(configs)
-                limited_configs = configs[:10]
+            logger.debug(f"Parsed JSON result: {result}")
 
-                # Provide helpful feedback based on the result
-                if not configs:
-                    return {
-                        "configs": [],
-                        "count": 0,
-                        "total": 0,
-                        "showing": 0,
-                        "message": f"No active alert configurations found for application ID: {application_id}",
-                        "suggestion": "You can create a new alert configuration using the 'create' operation."
-                    }
-                else:
-                    return {
-                        "configs": limited_configs,
-                        "count": len(limited_configs),
-                        "total": total_count,
-                        "showing": len(limited_configs),
-                        "message": f"Found {total_count} active alert configuration(s) for application ID: {application_id}. Showing first {len(limited_configs)}."
-                    }
+            if isinstance(result, list):
+                configs = result
+            else:
+                configs = [result] if result else []
 
-            except json.JSONDecodeError as e:
-                error_msg = f"Failed to parse response JSON: {e}"
-                logger.error(error_msg)
-                return {"error": error_msg}
+            # Limit to first 10 results
+            total_count = len(configs)
+            limited_configs = configs[:10]
+
+            # Provide helpful feedback based on the result
+            if not configs:
+                return {
+                    "configs": [],
+                    "count": 0,
+                    "total": 0,
+                    "showing": 0,
+                    "message": f"No active alert configurations found for application ID: {application_id}",
+                    "suggestion": "You can create a new alert configuration using the 'create' operation."
+                }
+            else:
+                return {
+                    "configs": limited_configs,
+                    "count": len(limited_configs),
+                    "total": total_count,
+                    "showing": len(limited_configs),
+                    "message": f"Found {total_count} active alert configuration(s) for application ID: {application_id}. Showing first {len(limited_configs)}."
+                }
 
         except Exception as e:
             logger.error(f"Error in find_active_application_alert_configs: {e}", exc_info=True)
@@ -423,6 +436,10 @@ class ApplicationAlertMCPTools(BaseInstanaClient):
         """
         try:
             logger.debug(f"find_application_alert_config called with id={id}, valid_on={valid_on}")
+
+            if not id:
+                logger.warning("No application alert configuration id provided; returning empty result")
+                return {"configs": [], "count": 0}
 
             # Call the find_application_alert_config method from the SDK
             logger.debug(f"Calling find_application_alert_config with id={id}, valid_on={valid_on}")

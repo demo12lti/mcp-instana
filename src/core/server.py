@@ -228,49 +228,58 @@ async def execute_tool(tool_name: str, arguments: dict, clients_state) -> str:
 
 def get_client_categories():
     """Get client categories with lazy imports to avoid circular dependencies"""
+    categories = {}
+    
+    # Import each category individually so one failure doesn't break all
     try:
-        from src.infrastructure.infrastructure_analyze_new import (
-            InfrastructureAnalyzeOption2,
-        )
         from src.router.application_smart_router_tool import SmartRouterMCPTool
-        from src.router.automation_smart_router_tool import AutomationSmartRouterMCPTool
-        from src.router.custom_dashboard_smart_router_tool import (
-            CustomDashboardSmartRouterMCPTool,
-        )
-        from src.router.events_smart_router_tool import SmartRouterEventsMCPTool
-        from src.router.maintenance_window_smart_router import MaintenanceWindowSmartRouterMCPTool
-        from src.router.website_smart_router import SmartRouterWebsiteMCPTool
-        from src.router.synthetic_smart_router import SmartRouterSyntheticMCPTool
+        categories["app"] = [('smart_router_client', SmartRouterMCPTool)]
     except ImportError as e:
-        logger.warning(f"Could not import client classes: {e}")
-        return {}
-
-    return {
-        "app": [
-            ('smart_router_client', SmartRouterMCPTool),
-        ],
-        "infra": [
-            ('infra_analyze_new_client', InfrastructureAnalyzeOption2),
-        ],
-        "automation": [
-            ('smart_router_automation_client', AutomationSmartRouterMCPTool),
-        ],
-        "website": [
-            ('smart_router_website_client', SmartRouterWebsiteMCPTool),
-        ],
-        "events": [
-            ('smart_router_events_client', SmartRouterEventsMCPTool),
-        ],
-        "settings": [
-            ('smart_router_custom_dashboard_client', CustomDashboardSmartRouterMCPTool),
-        ],
-        "synthetic": [
-            ('smart_router_synthetic_client', SmartRouterSyntheticMCPTool),
-        ],
-        "maintenance": [
-            ('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool),
-        ]
-    }
+        logger.warning(f"Could not import app client: {e}")
+    
+    try:
+        from src.infrastructure.infrastructure_analyze_new import InfrastructureAnalyzeOption2
+        categories["infra"] = [('infra_analyze_new_client', InfrastructureAnalyzeOption2)]
+    except ImportError as e:
+        logger.warning(f"Could not import infra client: {e}")
+    
+    try:
+        from src.router.automation_smart_router_tool import AutomationSmartRouterMCPTool
+        categories["automation"] = [('smart_router_automation_client', AutomationSmartRouterMCPTool)]
+    except ImportError as e:
+        logger.warning(f"Could not import automation client: {e}")
+    
+    try:
+        from src.router.website_smart_router import SmartRouterWebsiteMCPTool
+        categories["website"] = [('smart_router_website_client', SmartRouterWebsiteMCPTool)]
+    except ImportError as e:
+        logger.warning(f"Could not import website client: {e}")
+    
+    try:
+        from src.router.events_smart_router_tool import SmartRouterEventsMCPTool
+        categories["events"] = [('smart_router_events_client', SmartRouterEventsMCPTool)]
+    except ImportError as e:
+        logger.warning(f"Could not import events client: {e}")
+    
+    try:
+        from src.router.custom_dashboard_smart_router_tool import CustomDashboardSmartRouterMCPTool
+        categories["settings"] = [('smart_router_custom_dashboard_client', CustomDashboardSmartRouterMCPTool)]
+    except ImportError as e:
+        logger.warning(f"Could not import settings client: {e}")
+    
+    try:
+        from src.router.synthetic_smart_router import SmartRouterSyntheticMCPTool
+        categories["synthetic"] = [('smart_router_synthetic_client', SmartRouterSyntheticMCPTool)]
+    except ImportError as e:
+        logger.warning(f"Could not import synthetic client: {e}")
+    
+    try:
+        from src.router.maintenance_window_smart_router import MaintenanceWindowSmartRouterMCPTool
+        categories["maintenance"] = [('smart_router_maintenance_window_client', MaintenanceWindowSmartRouterMCPTool)]
+    except ImportError as e:
+        logger.warning(f"Could not import maintenance client: {e}")
+    
+    return categories
 
 def get_prompt_categories():
     """Get prompt categories organized by functionality"""
@@ -299,6 +308,7 @@ def get_prompt_categories():
         from src.prompts.website.website_metrics import WebsiteMetricsPrompts
         from src.prompts.synthetic.synthetic_setting import SyntheticMonitoringPrompts
         from src.prompts.synthetic.synthetic_tools import SyntheticToolsPrompts
+        from src.prompts.maintenance_window_prompts import MaintenanceWindowPrompts
     except ImportError as e:
         logger.warning(f"Could not import prompt classes: {e}")
         return {}
@@ -317,6 +327,7 @@ def get_prompt_categories():
     website_metrics_prompts = WebsiteMetricsPrompts.get_prompts()
     synthetic_setting_prompts = SyntheticMonitoringPrompts.get_prompts()
     synthetic_tools_prompts = SyntheticToolsPrompts.get_prompts()
+    maintenance_window_prompts = MaintenanceWindowPrompts.get_prompts()
 
     return {
         "app": [
@@ -341,6 +352,9 @@ def get_prompt_categories():
         "synthetic": [
             ("Synthetic Monitoring Settings", synthetic_setting_prompts),
             ("Synthetic Monitoring Tools", synthetic_tools_prompts),
+        ],
+        "maintenance": [
+            ("Maintenance Window", maintenance_window_prompts),
         ]
     }
 
@@ -455,7 +469,7 @@ def main():
         else:
             set_log_level(args.log_level)
 
-        all_categories = {"app", "infra", "events", "automation", "website", "settings", "synthetic"}
+        all_categories = {"app", "infra", "events", "automation", "website", "settings", "synthetic", "maintenance"}
 
         # Handle --list-tools option
         if args.list_tools:
@@ -474,17 +488,21 @@ def main():
 
         # Enable only specified categories if --tools is provided
         if args.tools:
-            specified_tools = {cat.strip() for cat in args.tools.split(",")}
-            invalid = specified_tools - all_categories
-            enabled = specified_tools & all_categories
-
-            # If no valid tools specified, default to all
-            if not enabled:
+            # Check if "all" is specified
+            if args.tools.lower() == "all":
                 enabled = set(all_categories)
+            else:
+                specified_tools = {cat.strip() for cat in args.tools.split(",")}
+                invalid = specified_tools - all_categories
+                enabled = specified_tools & all_categories
 
-        if invalid:
-            logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, website, settings, synthetic")
-            sys.exit(2)
+                # If no valid tools specified, default to all
+                if not enabled:
+                    enabled = set(all_categories)
+
+                if invalid:
+                    logger.error(f"Error: Unknown category/categories: {', '.join(invalid)}. Available categories: app, infra, events, automation, website, settings, synthetic, maintenance")
+                    sys.exit(2)
 
         # Print enabled tools for user information
         enabled_tool_classes = []

@@ -92,12 +92,168 @@ Examples:
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 from src.core.utils import BaseInstanaClient, register_as_tool, with_header_auth
 
 logger = logging.getLogger(__name__)
+
+
+def parse_human_time_to_epoch(time_input: Union[str, int, None]) -> Optional[int]:
+    """
+    Parse human-readable time formats to Unix epoch milliseconds.
+    
+    Supports:
+    - Unix timestamps (milliseconds): 1745020800000
+    - ISO 8601 strings: "2025-02-27T14:00:00Z"
+    - Relative times: "in 2 hours", "in 30 minutes", "tomorrow at 10am"
+    - Natural dates: "February 27, 2025 at 2:00 PM UTC"
+    
+    Args:
+        time_input: Time in various formats (string, int, or None)
+        
+    Returns:
+        Unix timestamp in milliseconds, or None if parsing fails
+    """
+    if time_input is None:
+        return None
+    
+    # If already an integer (epoch timestamp), return it
+    if isinstance(time_input, int):
+        # If it looks like seconds (< year 3000 in seconds), convert to ms
+        if time_input < 32503680000:  # Jan 1, 3000 in seconds
+            return time_input * 1000
+        return time_input
+    
+    # Convert to string for parsing
+    time_str = str(time_input).strip()
+    
+    # Try to parse as integer first
+    try:
+        timestamp = int(time_str)
+        if timestamp < 32503680000:  # Seconds
+            return timestamp * 1000
+        return timestamp
+    except ValueError:
+        pass
+    
+    current_time = datetime.now()
+    
+    # Handle relative times like "in 2 hours", "in 30 minutes"
+    relative_pattern = r'in\s+(\d+)\s+(hour|hours|minute|minutes|day|days)'
+    match = re.search(relative_pattern, time_str.lower())
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        
+        if 'hour' in unit:
+            target_time = current_time + timedelta(hours=amount)
+        elif 'minute' in unit:
+            target_time = current_time + timedelta(minutes=amount)
+        elif 'day' in unit:
+            target_time = current_time + timedelta(days=amount)
+        else:
+            return None
+            
+        return int(target_time.timestamp() * 1000)
+    
+    # Handle "tomorrow", "today"
+    if 'tomorrow' in time_str.lower():
+        target_time = current_time + timedelta(days=1)
+        # Try to extract time if specified
+        time_match = re.search(r'(\d{1,2})\s*(am|pm)', time_str.lower())
+        if time_match:
+            hour = int(time_match.group(1))
+            if time_match.group(2) == 'pm' and hour != 12:
+                hour += 12
+            elif time_match.group(2) == 'am' and hour == 12:
+                hour = 0
+            target_time = target_time.replace(hour=hour, minute=0, second=0, microsecond=0)
+        else:
+            target_time = target_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        return int(target_time.timestamp() * 1000)
+    
+    if 'today' in time_str.lower():
+        target_time = current_time
+        time_match = re.search(r'(\d{1,2})\s*(am|pm)', time_str.lower())
+        if time_match:
+            hour = int(time_match.group(1))
+            if time_match.group(2) == 'pm' and hour != 12:
+                hour += 12
+            elif time_match.group(2) == 'am' and hour == 12:
+                hour = 0
+            target_time = target_time.replace(hour=hour, minute=0, second=0, microsecond=0)
+        return int(target_time.timestamp() * 1000)
+    
+    # Try ISO 8601 format
+    try:
+        # Handle various ISO formats
+        for fmt in [
+            "%Y-%m-%dT%H:%M:%SZ",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
+        ]:
+            try:
+                dt = datetime.strptime(time_str, fmt)
+                return int(dt.timestamp() * 1000)
+            except ValueError:
+                continue
+    except Exception:
+        pass
+    
+    # If all parsing fails, return None
+    logger.warning(f"Could not parse time input: {time_str}")
+    return None
+
+
+def parse_duration_to_minutes(duration_input: Union[str, int, None]) -> Optional[int]:
+    """
+    Parse human-readable duration to minutes.
+    
+    Supports:
+    - Integer minutes: 120
+    - String with units: "2 hours", "30 minutes", "1 day"
+    
+    Args:
+        duration_input: Duration in various formats
+        
+    Returns:
+        Duration in minutes, or None if parsing fails
+    """
+    if duration_input is None:
+        return None
+    
+    # If already an integer, return it
+    if isinstance(duration_input, int):
+        return duration_input
+    
+    duration_str = str(duration_input).strip().lower()
+    
+    # Try to parse as integer
+    try:
+        return int(duration_str)
+    except ValueError:
+        pass
+    
+    # Parse "X hours", "X minutes", "X days"
+    pattern = r'(\d+)\s*(hour|hours|minute|minutes|day|days)'
+    match = re.search(pattern, duration_str)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        
+        if 'hour' in unit:
+            return amount * 60
+        elif 'minute' in unit:
+            return amount
+        elif 'day' in unit:
+            return amount * 24 * 60
+    
+    logger.warning(f"Could not parse duration input: {duration_str}")
+    return None
 
 
 class MaintenanceWindowMCPTools(BaseInstanaClient):
@@ -185,11 +341,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         imap_code: Optional[str] = None,
         imap_codes: Optional[List[str]] = None,
         window_id: Optional[str] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        duration_minutes: Optional[int] = None,
-        duration_hours: Optional[int] = None,
-        duration_days: Optional[int] = None,
+        start_time: Optional[Union[int, str]] = None,
+        end_time: Optional[Union[int, str]] = None,
+        duration_minutes: Optional[Union[int, str]] = None,
+        duration_hours: Optional[Union[int, str]] = None,
+        duration_days: Optional[Union[int, str]] = None,
         reason: Optional[str] = None,
         template: Optional[str] = None,
         change_request_id: Optional[str] = None,
@@ -277,7 +433,73 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             )
         """
         try:
-            logger.info(f"Executing maintenance operation: {operation}")
+            logger.info(f"=== MAINTENANCE OPERATION START ===")
+            logger.info(f"Operation: {operation}")
+            logger.info(f"IMAP Code: {imap_code or application_id}")
+            
+            # Log recurrence parameters if provided
+            if rrule:
+                logger.info(f"🔁 RECURRING WINDOW REQUESTED")
+                logger.info(f"RRULE parameter: {rrule}")
+                logger.info(f"Until Date parameter: {until_date}")
+            
+            # Parse human-readable time formats to epoch timestamps
+            if start_time is not None:
+                parsed_start = parse_human_time_to_epoch(start_time)
+                if parsed_start is None:
+                    return {
+                        "error": f"Could not parse start_time: {start_time}",
+                        "suggestion": "Use formats like: 'in 2 hours', 'tomorrow at 10am', '2025-02-27T14:00:00Z', or Unix timestamp in milliseconds"
+                    }
+                start_time = parsed_start
+                logger.info(f"Parsed start_time to: {start_time} ({datetime.fromtimestamp(start_time/1000).strftime('%Y-%m-%d %H:%M:%S UTC')})")
+            
+            if end_time is not None:
+                parsed_end = parse_human_time_to_epoch(end_time)
+                if parsed_end is None:
+                    return {
+                        "error": f"Could not parse end_time: {end_time}",
+                        "suggestion": "Use formats like: 'in 4 hours', '2025-02-27T18:00:00Z', or Unix timestamp in milliseconds"
+                    }
+                end_time = parsed_end
+                logger.info(f"Parsed end_time to: {end_time}")
+            
+            # Parse duration formats
+            if duration_minutes is not None and not isinstance(duration_minutes, int):
+                parsed_duration = parse_duration_to_minutes(duration_minutes)
+                if parsed_duration is None:
+                    return {
+                        "error": f"Could not parse duration_minutes: {duration_minutes}",
+                        "suggestion": "Use formats like: '120', '2 hours', '30 minutes'"
+                    }
+                duration_minutes = parsed_duration
+                logger.info(f"Parsed duration_minutes to: {duration_minutes}")
+            
+            if duration_hours is not None and not isinstance(duration_hours, int):
+                try:
+                    # Handle decimal hours (e.g., 0.5 hours = 30 minutes)
+                    hours_float = float(duration_hours)
+                    if hours_float < 1:
+                        # Convert fractional hours to minutes
+                        duration_minutes = int(hours_float * 60)
+                        duration_hours = None
+                        logger.info(f"Converted {hours_float} hours to {duration_minutes} minutes")
+                    else:
+                        duration_hours = int(hours_float)
+                except (ValueError, TypeError):
+                    return {
+                        "error": f"Could not parse duration_hours: {duration_hours}",
+                        "suggestion": "Use an integer value like: 2, 4, 24 or use duration_minutes for values less than 1 hour"
+                    }
+            
+            if duration_days is not None and not isinstance(duration_days, int):
+                try:
+                    duration_days = int(float(duration_days))
+                except (ValueError, TypeError):
+                    return {
+                        "error": f"Could not parse duration_days: {duration_days}",
+                        "suggestion": "Use an integer value like: 1, 2, 7"
+                    }
             
             # Validate operation
             valid_operations = [
@@ -308,6 +530,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     notification_channels=notification_channels,
                     use_tag_filter_expression=use_tag_filter_expression,
                     tag_name=tag_name,
+                    rrule=rrule,
+                    until_date=until_date,
                     ctx=ctx
                 )
             elif operation == "modify":
@@ -397,6 +621,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         notification_channels: Optional[List[str]],
         use_tag_filter_expression: Optional[bool],
         tag_name: Optional[str],
+        rrule: Optional[str],
+        until_date: Optional[str],
         ctx
     ) -> Dict[str, Any]:
         """
@@ -462,6 +688,19 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     duration_unit = "HOURS"
                 else:
                     duration_min = duration_minutes or template_config.get("default_duration", 60)
+                    
+                    # IMPORTANT: For recurring windows, Instana requires whole hours
+                    if rrule and duration_min < 60:
+                        logger.warning(f"⚠️ Recurring windows require duration >= 1 hour")
+                        logger.warning(f"Converting {duration_min} minutes to 1 hour for recurring window")
+                        duration_min = 60
+                    elif rrule and duration_min % 60 != 0:
+                        # Round up to nearest hour for recurring windows
+                        duration_hours_rounded = (duration_min + 59) // 60
+                        logger.warning(f"⚠️ Recurring windows require whole hours")
+                        logger.warning(f"Rounding {duration_min} minutes up to {duration_hours_rounded} hour(s)")
+                        duration_min = duration_hours_rounded * 60
+                    
                     duration_ms = duration_min * 60 * 1000
                     duration_amount = duration_min // 60 if duration_min >= 60 else 1
                     duration_unit = "HOURS" if duration_min >= 60 else "HOURS"
@@ -502,20 +741,74 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             reason_sanitized = (reason or template_config.get("description", "Maintenance")).replace(" ", "_")
             window_name = f"{target_code}_{reason_sanitized}_{date_str}"
             
+            # Determine scheduling type and build scheduling object
+            scheduling_type = "ONE_TIME"
+            scheduling_obj = {
+                "start": start_time,
+                "duration": {
+                    "amount": duration_amount,
+                    "unit": duration_unit
+                },
+                "type": "ONE_TIME"
+            }
+            
+            # Add recurrence if rrule is provided
+            if rrule:
+                logger.info(f"=== RECURRING WINDOW DETECTED ===")
+                logger.info(f"Input RRULE: {rrule}")
+                logger.info(f"Input until_date: {until_date}")
+                
+                # IMPORTANT: Instana uses "RECURRENT" not "RECURRING"
+                scheduling_type = "RECURRENT"
+                scheduling_obj["type"] = "RECURRENT"
+                
+                # Build rrule with UNTIL if provided
+                if until_date:
+                    logger.info(f"Processing until_date for RRULE...")
+                    # Parse until_date to ensure it's in the right format
+                    from datetime import datetime as dt
+                    try:
+                        # Try parsing ISO format
+                        until_dt = dt.fromisoformat(until_date.replace('Z', '+00:00'))
+                        # Format as YYYYMMDDTHHMMSSZ for RRULE
+                        until_formatted = until_dt.strftime('%Y%m%dT%H%M%SZ')
+                        logger.info(f"Converted until_date: {until_date} -> {until_formatted}")
+                        
+                        # Add UNTIL to rrule if not already present
+                        if 'UNTIL=' not in rrule.upper():
+                            rrule_with_until = f"{rrule};UNTIL={until_formatted}"
+                            logger.info(f"Added UNTIL to RRULE: {rrule_with_until}")
+                        else:
+                            rrule_with_until = rrule
+                            logger.info(f"RRULE already contains UNTIL, using as-is")
+                    except Exception as e:
+                        logger.warning(f"Could not parse until_date '{until_date}': {e}, using rrule as-is")
+                        rrule_with_until = rrule
+                else:
+                    logger.info(f"No until_date provided, using RRULE without UNTIL")
+                    rrule_with_until = rrule
+                
+                # Add rrule to scheduling object
+                scheduling_obj["rrule"] = rrule_with_until
+                
+                # Add timezone (required for recurring windows in Instana)
+                # Default to UTC if not specified
+                scheduling_obj["timezoneId"] = "UTC"
+                
+                logger.info(f"✅ Final RRULE for API: {rrule_with_until}")
+                logger.info(f"✅ Scheduling type set to: RECURRENT (Instana format)")
+                logger.info(f"✅ Timezone set to: UTC")
+                logger.info(f"=== END RECURRING WINDOW SETUP ===")
+            else:
+                logger.info(f"Creating ONE_TIME maintenance window (no rrule provided)")
+            
             # Build maintenance window payload matching Instana's real API structure
             if use_tag_filter_expression:
                 # Format 2: Tag Filter Expression (for synthetic monitoring)
                 window_payload = {
                     "name": window_name,
                     "query": "",
-                    "scheduling": {
-                        "start": start_time,
-                        "duration": {
-                            "amount": duration_amount,
-                            "unit": duration_unit
-                        },
-                        "type": "ONE_TIME"
-                    },
+                    "scheduling": scheduling_obj,
                     "paused": False,
                     "tagFilterExpression": {
                         "type": "TAG_FILTER",
@@ -534,14 +827,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 window_payload = {
                     "name": window_name,
                     "query": f"entity.tag:imap={target_code}",
-                    "scheduling": {
-                        "start": start_time,
-                        "duration": {
-                            "amount": duration_amount,
-                            "unit": duration_unit
-                        },
-                        "type": "ONE_TIME"
-                    },
+                    "scheduling": scheduling_obj,
                     "paused": False,
                     "tagFilterExpressionEnabled": False,
                     "retriggerOpenAlertsEnabled": False
@@ -555,7 +841,25 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             # Add ID to payload as required by API
             window_payload["id"] = window_id
             
+            # Log the payload being sent
+            logger.info(f"=== CREATING MAINTENANCE WINDOW ===")
+            logger.info(f"Window ID: {window_id}")
+            logger.info(f"Window Name: {window_name}")
+            logger.info(f"IMAP Code: {target_code}")
+            logger.info(f"Scheduling Type: {scheduling_obj.get('type')}")
+            if scheduling_obj.get('type') == 'RECURRING':
+                logger.info(f"RRULE in payload: {scheduling_obj.get('rrule')}")
+            logger.info(f"Start Time: {start_time} ({dt.fromtimestamp(start_time/1000).strftime('%Y-%m-%d %H:%M:%S UTC')})")
+            logger.info(f"Duration: {duration_amount} {duration_unit}")
+            
             endpoint = f"api/settings/v2/maintenance/{window_id}"
+            logger.info(f"API Endpoint: {endpoint}")
+            
+            # Log the complete payload for debugging
+            import json
+            logger.info(f"Complete API Payload:")
+            logger.info(json.dumps(window_payload, indent=2))
+            
             result = await self.make_request(
                 endpoint=endpoint,
                 method="PUT",
@@ -563,11 +867,40 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             )
             
             if "error" in result:
+                logger.error(f"❌ Failed to create maintenance window: {result.get('error')}")
+                logger.error(f"Payload that was rejected:")
+                logger.error(json.dumps(window_payload, indent=2))
+                
+                # Check if it's a 422 error (validation error)
+                if "422" in str(result.get('error')):
+                    logger.error(f"⚠️ 422 Unprocessable Entity - Instana rejected the payload")
+                    logger.error(f"Common causes:")
+                    logger.error(f"  1. Invalid RRULE format")
+                    logger.error(f"  2. RRULE not supported by this Instana version")
+                    logger.error(f"  3. Missing required fields in scheduling")
+                    logger.error(f"  4. Invalid duration unit or amount")
+                    if scheduling_obj.get('type') == 'RECURRING':
+                        logger.error(f"  5. RRULE syntax error: {scheduling_obj.get('rrule')}")
+                
                 return result
             
             # Use the generated ID (API returns the same ID)
             returned_id = result.get("id", window_id)
             window_id = returned_id
+            
+            # Log success and verify scheduling type in response
+            response_scheduling = result.get("scheduling", {})
+            response_type = response_scheduling.get("type", "UNKNOWN")
+            logger.info(f"✅ Maintenance window created successfully")
+            logger.info(f"Response scheduling type: {response_type}")
+            if response_type == "RECURRING":
+                response_rrule = response_scheduling.get("rrule", "NOT_FOUND")
+                logger.info(f"✅ RECURRING window confirmed in response")
+                logger.info(f"Response RRULE: {response_rrule}")
+            elif response_type == "ONE_TIME" and scheduling_obj.get('type') == 'RECURRING':
+                logger.warning(f"⚠️ WARNING: Requested RECURRING but response shows ONE_TIME")
+                logger.warning(f"This may indicate the RRULE was not accepted by Instana API")
+            logger.info(f"=== END MAINTENANCE WINDOW CREATION ===")
             
             # Integrate with ServiceNow if change request provided
             servicenow_result = None
@@ -1256,6 +1589,8 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     notification_channels=None,
                     use_tag_filter_expression=use_tag_filter_expression,
                     tag_name=tag_name,
+                    rrule=None,
+                    until_date=None,
                     ctx=ctx
                 )
                 results.append({
