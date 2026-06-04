@@ -6,8 +6,8 @@ and ServiceNow integration. It automates the creation, modification, and closure
 maintenance windows to prevent false alerts during planned operational activities.
 
 Integration Points:
-    - Integrates with smart_router_tool.py via the manage_instana_resources() method
-    - Supports askMEA bot and IA agent interactions for automated scheduling
+    - Consumed by maintenance_window_smart_router.py via the manage_maintenance_windows() method
+    - Supports WatsonX Orchestrate and MCP agent interactions for automated scheduling
     - Coordinates with ServiceNow for change request synchronization
     - Aligns with Instana alert configurations and application perspectives
 
@@ -19,36 +19,30 @@ Key Features:
     5. Predefined rule templates for common maintenance scenarios
     6. Multi-environment support with consistency enforcement
 
-Usage from smart_router_tool.py:
+Usage from maintenance_window_smart_router.py:
     # Create maintenance window
-    resource_type="maintenance_window"
-    operation="create"
-    params={
-        "application_id": "app-123",
-        "start_time": 1709020800000,  # Unix timestamp in ms
-        "duration_minutes": 120,
-        "reason": "Database migration",
-        "change_request_id": "CHG0012345",
-        "affected_services": ["payment-service", "user-service"],
-        "notification_channels": ["slack", "email"]
-    }
+    resource_type="window", operation="create"
+    imap_code="EAL-012471"
+    start_time="in 2 hours"
+    duration_minutes="120"
+    reason="Database migration"
+    change_request_id="CHG0012345"
+    affected_services='["payment-service","user-service"]'
+    notification_channels='["slack","email"]'
 
     # Modify existing window
-    resource_type="maintenance_window"
-    operation="modify"
-    params={
-        "window_id": "mw-789",
-        "new_end_time": 1709027400000,
-        "reason": "Extended due to complications"
-    }
+    resource_type="window", operation="modify"
+    window_id="mw-789"
+    duration_minutes="180"
+    reason="Extended due to complications"
 
     # Close maintenance window
-    resource_type="maintenance_window"
-    operation="close"
-    params={
-        "window_id": "mw-789",
-        "completion_notes": "Migration completed successfully"
-    }
+    resource_type="window", operation="close"
+    window_id="mw-789"
+    completion_notes="Migration completed successfully"
+
+    # Get available templates
+    resource_type="templates", operation="get"
 
 Configuration Requirements:
     - INSTANA_API_TOKEN: API token with write permissions
@@ -66,19 +60,19 @@ Examples:
     # Example 1: Create maintenance window with predefined template
     await maintenance_client.execute_maintenance_operation(
         operation="create",
-        application_id="app-123",
+        imap_code="EAL-012471",
         template="deployment",
-        start_time=1709020800000,
-        duration_minutes=60,
+        start_time="in 2 hours",
+        duration_minutes="60",
         ctx=ctx
     )
 
     # Example 2: Bulk create windows for multiple applications
     await maintenance_client.execute_maintenance_operation(
         operation="bulk_create",
-        application_ids=["app-123", "app-456", "app-789"],
-        start_time=1709020800000,
-        duration_minutes=120,
+        imap_codes=["EAL-012471", "ORZ-000012", "MUR-123456"],
+        start_time="2026-06-01T02:00:00Z",
+        duration_minutes="120",
         reason="Infrastructure upgrade",
         ctx=ctx
     )
@@ -86,11 +80,12 @@ Examples:
     # Example 3: Query active maintenance windows
     await maintenance_client.execute_maintenance_operation(
         operation="list_active",
-        application_id="app-123",
+        imap_code="EAL-012471",
         ctx=ctx
     )
 """
 
+import json
 import logging
 import re
 from datetime import datetime, timedelta
@@ -356,6 +351,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         tag_name: Optional[str] = None,
         rrule: Optional[str] = None,
         until_date: Optional[str] = None,
+        # Synthetic test parameters
+        apply_on_synthetic_tests: Optional[bool] = False,
+        synthetic_test_names: Optional[List[str]] = None,
+        synthetic_custom_property_key: Optional[str] = None,
+        synthetic_custom_property_value: Optional[str] = None,
+        synthetic_include_test_name_filter: Optional[bool] = False,
         ctx=None
     ) -> Dict[str, Any]:
         """
@@ -397,6 +398,12 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             completion_notes: Notes for window closure
             use_tag_filter_expression: Use tag filter expression format (default: False)
             tag_name: Tag name for filter expression (default: synthetic.tags)
+            rrule: Recurrence rule for recurring windows (RFC 5545 format)
+            until_date: End date for recurring windows
+            apply_on_synthetic_tests: Apply maintenance window on synthetic tests (default: False)
+            synthetic_test_names: List of synthetic test names to apply maintenance window on
+            synthetic_custom_property_key: Custom property key for synthetic test filtering (e.g., "imap")
+            synthetic_custom_property_value: Custom property value for synthetic test filtering (e.g., "eal-012471")
             ctx: MCP context
             
         Returns:
@@ -532,6 +539,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     tag_name=tag_name,
                     rrule=rrule,
                     until_date=until_date,
+                    apply_on_synthetic_tests=apply_on_synthetic_tests,
+                    synthetic_test_names=synthetic_test_names,
+                    synthetic_custom_property_key=synthetic_custom_property_key,
+                    synthetic_custom_property_value=synthetic_custom_property_value,
+                    synthetic_include_test_name_filter=synthetic_include_test_name_filter,
                     ctx=ctx
                 )
             elif operation == "modify":
@@ -552,22 +564,22 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 )
             elif operation == "list_active":
                 return await self._list_active_windows(
-                    application_id=application_id,
+                    application_id=application_id or imap_code,
                     ctx=ctx
                 )
             elif operation == "list_scheduled":
                 return await self._list_scheduled_windows(
-                    application_id=application_id,
+                    application_id=application_id or imap_code,
                     ctx=ctx
                 )
             elif operation == "list_all":
                 return await self._list_all_windows(
-                    application_id=application_id,
+                    application_id=application_id or imap_code,
                     ctx=ctx
                 )
             elif operation == "list_expired":
                 return await self._list_expired_windows(
-                    application_id=application_id,
+                    application_id=application_id or imap_code,
                     ctx=ctx
                 )
             elif operation == "bulk_create":
@@ -623,6 +635,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         tag_name: Optional[str],
         rrule: Optional[str],
         until_date: Optional[str],
+        apply_on_synthetic_tests: Optional[bool],
+        synthetic_test_names: Optional[List[str]],
+        synthetic_custom_property_key: Optional[str],
+        synthetic_custom_property_value: Optional[str],
+        synthetic_include_test_name_filter: Optional[bool],
         ctx
     ) -> Dict[str, Any]:
         """
@@ -658,11 +675,41 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             target_code = imap_code or application_id
             
             # Validate required parameters
-            if not target_code:
-                return {"error": "imap_code or application_id is required"}
+            # For synthetic tests, we don't need imap_code if we have synthetic_test_names OR custom property
+            has_synthetic_filter = (apply_on_synthetic_tests and
+                                   (synthetic_test_names or
+                                    (synthetic_custom_property_key and synthetic_custom_property_value)))
+            
+            if not target_code and not has_synthetic_filter:
+                return {
+                    "error": "imap_code or application_id is required",
+                    "suggestion": "For synthetic tests, provide either: synthetic_test_names=['test1', 'test2'] OR synthetic_custom_property_key='imap' and synthetic_custom_property_value='eal-012471'"
+                }
             
             if not start_time:
                 return {"error": "start_time is required"}
+            
+            # SPECIAL CASE: If apply_on_synthetic_tests is True and we have imap_code but no custom property,
+            # convert imap_code to custom property for AND logic
+            if apply_on_synthetic_tests and target_code and synthetic_test_names and not synthetic_custom_property_key:
+                logger.warning(f"⚠️ DETECTED: Synthetic test mode with imap_code '{target_code}' - converting to custom property")
+                synthetic_custom_property_key = "imap"
+                synthetic_custom_property_value = target_code
+                # Clear target_code so it doesn't interfere
+                target_code = None
+            
+            # AUTO-DETECTION DISABLED: Rely on WatsonX prompt matching instead
+            # The prompt functions now have clear separation:
+            # - create_maintenance_window() → Applications (uses imap_code)
+            # - create_maintenance_window_for_synthetic_tests_by_name() → Synthetic tests (uses synthetic_test_names)
+            # - create_maintenance_window_for_synthetic_tests_by_property() → Synthetic tests (uses custom_property)
+            #
+            # Auto-detection was causing false positives for application names containing "test" or underscores
+            # If WatsonX matches the wrong prompt, the user should rephrase their request
+            
+            if not apply_on_synthetic_tests and target_code:
+                logger.info(f"✓ Creating application maintenance window for: {target_code}")
+                logger.info(f"✓ Will lookup application ID from IMAP code")
             
             # Apply template if specified
             template_config = {}
@@ -739,7 +786,23 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             from datetime import datetime as dt
             date_str = dt.fromtimestamp(start_time / 1000).strftime("%Y_%m_%d")
             reason_sanitized = (reason or template_config.get("description", "Maintenance")).replace(" ", "_")
-            window_name = f"{target_code}_{reason_sanitized}_{date_str}"
+            
+            # For synthetic tests, use test names in window name
+            if apply_on_synthetic_tests and synthetic_test_names:
+                # Use first test name, or join multiple with commas
+                if len(synthetic_test_names) == 1:
+                    test_names_str = synthetic_test_names[0]
+                else:
+                    test_names_str = ",".join(synthetic_test_names[:2])  # Use first 2 test names
+                    if len(synthetic_test_names) > 2:
+                        test_names_str += f",+{len(synthetic_test_names)-2}more"
+                window_name = f"{test_names_str}_{reason_sanitized}_{date_str}"
+            elif apply_on_synthetic_tests and synthetic_custom_property_key:
+                window_name = f"{synthetic_custom_property_key}_{synthetic_custom_property_value}_{reason_sanitized}_{date_str}"
+            elif target_code:
+                window_name = f"{target_code}_{reason_sanitized}_{date_str}"
+            else:
+                window_name = f"MaintenanceWindow_{reason_sanitized}_{date_str}"
             
             # Determine scheduling type and build scheduling object
             scheduling_type = "ONE_TIME"
@@ -803,35 +866,319 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 logger.info(f"Creating ONE_TIME maintenance window (no rrule provided)")
             
             # Build maintenance window payload matching Instana's real API structure
-            if use_tag_filter_expression:
-                # Format 2: Tag Filter Expression (for synthetic monitoring)
-                window_payload = {
-                    "name": window_name,
-                    "query": "",
-                    "scheduling": scheduling_obj,
-                    "paused": False,
-                    "tagFilterExpression": {
+            if apply_on_synthetic_tests:
+                # Format 3: Synthetic Tests - Apply on synthetic monitoring tests
+                logger.info(f"=== SYNTHETIC TEST MAINTENANCE WINDOW ===")
+                logger.info(f"Synthetic test names: {synthetic_test_names}")
+                logger.info(f"Synthetic custom property: {synthetic_custom_property_key}={synthetic_custom_property_value}")
+                logger.info(f"Synthetic include test name filter: {synthetic_include_test_name_filter}")
+                
+                # Check if we should use AND logic (testName AND custom property)
+                if synthetic_test_names and synthetic_custom_property_key and synthetic_custom_property_value:
+                    # Option 3: AND logic - testName AND custom property
+                    logger.info(f"Applying to synthetic tests with AND logic")
+                    logger.info(f"Filter 1: testName in {synthetic_test_names}")
+                    logger.info(f"Filter 2: {synthetic_custom_property_key}={synthetic_custom_property_value}")
+                    
+                    # Build filters for AND logic
+                    filters = []
+                    
+                    # Add testName filters (if multiple, use OR for test names, then AND with property)
+                    if len(synthetic_test_names) == 1:
+                        # Single test name
+                        filters.append({
+                            "type": "TAG_FILTER",
+                            "name": "synthetic.tags",
+                            "stringValue": f"testName={synthetic_test_names[0]}",
+                            "numberValue": None,
+                            "booleanValue": None,
+                            "floatValue": None,
+                            "key": "testName",
+                            "value": synthetic_test_names[0],
+                            "operator": "EQUALS",
+                            "entity": "NOT_APPLICABLE"
+                        })
+                    else:
+                        # Multiple test names - create OR expression for test names
+                        test_name_filters = []
+                        for test_name in synthetic_test_names:
+                            test_name_filters.append({
+                                "type": "TAG_FILTER",
+                                "name": "synthetic.tags",
+                                "stringValue": f"testName={test_name}",
+                                "numberValue": None,
+                                "booleanValue": None,
+                                "floatValue": None,
+                                "key": "testName",
+                                "value": test_name,
+                                "operator": "EQUALS",
+                                "entity": "NOT_APPLICABLE"
+                            })
+                        filters.append({
+                            "type": "EXPRESSION",
+                            "logicalOperator": "OR",
+                            "elements": test_name_filters
+                        })
+                    
+                    # Add custom property filter
+                    filters.append({
                         "type": "TAG_FILTER",
-                        "name": tag_name or "synthetic.tags",
-                        "stringValue": f"imap={target_code}",
-                        "key": "imap",
-                        "value": target_code,
+                        "name": "synthetic.tags",
+                        "stringValue": f"{synthetic_custom_property_key}={synthetic_custom_property_value.upper()}",
+                        "numberValue": None,
+                        "booleanValue": None,
+                        "floatValue": None,
+                        "key": synthetic_custom_property_key,
+                        "value": synthetic_custom_property_value.upper(),
                         "operator": "EQUALS",
                         "entity": "NOT_APPLICABLE"
-                    },
-                    "tagFilterExpressionEnabled": True,
-                    "retriggerOpenAlertsEnabled": False
-                }
+                    })
+                    
+                    window_payload = {
+                        "name": window_name,
+                        "query": "",
+                        "scheduling": scheduling_obj,
+                        "paused": False,
+                        "tagFilterExpression": {
+                            "type": "EXPRESSION",
+                            "logicalOperator": "AND",
+                            "elements": filters
+                        },
+                        "tagFilterExpressionEnabled": True,
+                        "retriggerOpenAlertsEnabled": False
+                    }
+                    
+                    logger.info(f"Synthetic test payload with AND logic:")
+                    logger.info(f"Test names: {synthetic_test_names}")
+                    logger.info(f"Custom property: {synthetic_custom_property_key}={synthetic_custom_property_value.upper()}")
+                    logger.info(f"Logical operator: AND")
+                    
+                elif synthetic_test_names:
+                    # Option 1: Filter by specific test names only (OR logic)
+                    logger.info(f"Applying to synthetic test names: {synthetic_test_names}")
+                    # Build query for multiple test names with OR logic
+                    test_filters = []
+                    for test_name in synthetic_test_names:
+                        test_filters.append({
+                            "type": "TAG_FILTER",
+                            "name": "synthetic.tags",
+                            "stringValue": f"testName={test_name}",
+                            "numberValue": None,
+                            "booleanValue": None,
+                            "floatValue": None,
+                            "key": "testName",
+                            "value": test_name,
+                            "operator": "EQUALS",
+                            "entity": "NOT_APPLICABLE"
+                        })
+                    
+                    # If multiple tests, use OR logic
+                    if len(test_filters) > 1:
+                        tag_filter_expression = {
+                            "type": "EXPRESSION",
+                            "logicalOperator": "OR",
+                            "elements": test_filters
+                        }
+                    else:
+                        tag_filter_expression = test_filters[0]
+                    
+                    window_payload = {
+                        "name": window_name,
+                        "query": "",
+                        "scheduling": scheduling_obj,
+                        "paused": False,
+                        "tagFilterExpression": tag_filter_expression,
+                        "tagFilterExpressionEnabled": True,
+                        "retriggerOpenAlertsEnabled": False
+                    }
+                    
+                    # Log the complete payload for debugging
+                    logger.info(f"Synthetic test payload with {len(test_filters)} test(s):")
+                    if len(test_filters) > 1:
+                        logger.info(f"Using OR logic with {len(test_filters)} filters")
+                        logger.info(f"Filter type: EXPRESSION with logicalOperator=OR")
+                    else:
+                        logger.info(f"Using single TAG_FILTER (no logical operator)")
+                    logger.info(f"Tag filter expression structure: {tag_filter_expression}")
+                    
+                elif synthetic_custom_property_key and synthetic_custom_property_value:
+                    # Option 2: Filter by custom properties (e.g., imap=eal-012471)
+                    # Create TWO filters with AND logic: testName AND custom property (like IMAP)
+                    logger.info(f"Applying to synthetic tests with custom property: {synthetic_custom_property_key}={synthetic_custom_property_value}")
+                    logger.info(f"Creating AND filter: testName={synthetic_custom_property_value} AND {synthetic_custom_property_key}={synthetic_custom_property_value.upper()}")
+                    
+                    # Build two filters with AND logic
+                    filters = [
+                        {
+                            "type": "TAG_FILTER",
+                            "name": "synthetic.tags",
+                            "stringValue": f"testName={synthetic_custom_property_value}",
+                            "numberValue": None,
+                            "booleanValue": None,
+                            "floatValue": None,
+                            "key": "testName",
+                            "value": synthetic_custom_property_value,
+                            "operator": "EQUALS",
+                            "entity": "NOT_APPLICABLE"
+                        },
+                        {
+                            "type": "TAG_FILTER",
+                            "name": "synthetic.tags",
+                            "stringValue": f"{synthetic_custom_property_key}={synthetic_custom_property_value.upper()}",
+                            "numberValue": None,
+                            "booleanValue": None,
+                            "floatValue": None,
+                            "key": synthetic_custom_property_key,
+                            "value": synthetic_custom_property_value.upper(),
+                            "operator": "EQUALS",
+                            "entity": "NOT_APPLICABLE"
+                        }
+                    ]
+                    
+                    window_payload = {
+                        "name": window_name,
+                        "query": "",
+                        "scheduling": scheduling_obj,
+                        "paused": False,
+                        "tagFilterExpression": {
+                            "type": "EXPRESSION",
+                            "logicalOperator": "AND",
+                            "elements": filters
+                        },
+                        "tagFilterExpressionEnabled": True,
+                        "retriggerOpenAlertsEnabled": False
+                    }
+                    
+                    # Log the complete payload for debugging
+                    logger.info(f"Synthetic test payload with AND logic (2 filters):")
+                    logger.info(f"Filter 1: testName={synthetic_custom_property_value}")
+                    logger.info(f"Filter 2: {synthetic_custom_property_key}={synthetic_custom_property_value.upper()}")
+                    logger.info(f"Tag filter expression structure: {window_payload['tagFilterExpression']}")
+                else:
+                    return {
+                        "error": "When apply_on_synthetic_tests is True, you must provide either synthetic_test_names or both synthetic_custom_property_key and synthetic_custom_property_value",
+                        "suggestion": "Provide synthetic_test_names=['test1', 'test2'] OR synthetic_custom_property_key='imap' and synthetic_custom_property_value='eal-012471'"
+                    }
+                
+                logger.info(f"=== END SYNTHETIC TEST SETUP ===")
+                
             else:
-                # Format 1: Simple Query String (default)
-                window_payload = {
-                    "name": window_name,
-                    "query": f"entity.tag:imap={target_code}",
-                    "scheduling": scheduling_obj,
-                    "paused": False,
-                    "tagFilterExpressionEnabled": False,
-                    "retriggerOpenAlertsEnabled": False
-                }
+                # Application Perspective - Need to get application ID from IMAP code
+                logger.info(f"Creating application maintenance window")
+                logger.info(f"Target IMAP code: {target_code}")
+                
+                # Initialize variables at function scope so they're available in response
+                app_id = None
+                app_label = None
+                
+                # Look up application ID from IMAP code
+                logger.info(f"Looking up application ID for IMAP code: {target_code}")
+                try:
+                    # Get all applications and filter by IMAP tag
+                    # The API requires a time window parameter
+                    # Use last 7 days as the time window to ensure we get all applications
+                    to_time = int(datetime.now().timestamp() * 1000)
+                    from_time = int((datetime.now() - timedelta(days=7)).timestamp() * 1000)
+                    window_size = 7 * 24 * 60 * 60 * 1000  # 7 days in milliseconds
+                    
+                    app_query_endpoint = f"api/application-monitoring/applications?windowSize={window_size}&to={to_time}&from={from_time}&pageSize=200"
+                    
+                    logger.info(f"Calling API: GET {app_query_endpoint}")
+                    app_result = await self.make_request(
+                        endpoint=app_query_endpoint,
+                        method="GET"
+                    )
+                    
+                    logger.info(f"API response type: {type(app_result)}")
+                    logger.info(f"API response keys: {app_result.keys() if isinstance(app_result, dict) else 'not a dict'}")
+                    
+                    if "error" in app_result:
+                        logger.error(f"Failed to lookup applications: {app_result.get('error')}")
+                        return {
+                            "error": f"Could not query applications from Instana: {app_result.get('error')}",
+                            "suggestion": "Check API permissions and connectivity"
+                        }
+                    
+                    # Extract applications and filter by IMAP tag
+                    all_applications = app_result.get("items", [])
+                    logger.info(f"Retrieved {len(all_applications)} applications from Instana")
+                    
+                    if len(all_applications) > 0:
+                        logger.info(f"Sample application structure: {list(all_applications[0].keys())}")
+                        # Log the first application's full structure to understand tag location
+                        import json
+                        logger.info(f"First application full structure: {json.dumps(all_applications[0], indent=2)}")
+                    
+                    # Filter applications by IMAP code
+                    # IMPORTANT: IMAP codes are in the application LABEL/NAME, not in tags!
+                    # Format: "EAL-012471_ApplicationName_Prod"
+                    matching_apps = []
+                    for app in all_applications:
+                        app_label = app.get("label", "unknown")
+                        app_id = app.get("id", "")
+                        
+                        # Extract IMAP code from label (format: IMAP-CODE_AppName_Env)
+                        # The IMAP code is at the start of the label before the first underscore
+                        imap_from_label = ""
+                        if "_" in app_label:
+                            imap_from_label = app_label.split("_")[0]
+                        
+                        logger.info(f"App: {app_label}, Extracted IMAP: '{imap_from_label}'")
+                        
+                        # Match by IMAP code (case-insensitive)
+                        if imap_from_label and imap_from_label.upper() == target_code.upper():
+                            matching_apps.append(app)
+                            logger.info(f"✓ Found matching application: {app_label} (ID: {app_id}, IMAP: {imap_from_label})")
+                    
+                    if not matching_apps:
+                        logger.error(f"No applications found with IMAP tag: {target_code}")
+                        logger.info(f"Searched through {len(all_applications)} applications")
+                        return {
+                            "error": f"No application found with IMAP code {target_code}",
+                            "suggestion": "Verify the IMAP code is correct and the application exists in Instana. The application must have an 'imap' tag with this value."
+                        }
+                    
+                    # Use the first matching application
+                    app = matching_apps[0]
+                    app_id = app.get("id")
+                    app_label = app.get("label", target_code)
+                    
+                    if not app_id:
+                        logger.error(f"Application found but no ID in response")
+                        return {
+                            "error": "Application found but missing ID field",
+                            "suggestion": "Contact support - unexpected API response format"
+                        }
+                    
+                    if len(matching_apps) > 1:
+                        logger.warning(f"⚠️ Multiple applications found with IMAP {target_code}, using first: {app_label}")
+                    
+                    logger.info(f"✓ Found application ID: {app_id} (label: {app_label})")
+                    
+                    # Create maintenance window with application ID
+                    window_payload = {
+                        "name": window_name,
+                        "query": f'entity.application.id:"{app_id}"',
+                        "scheduling": scheduling_obj,
+                        "paused": False,
+                        "tagFilterExpression": None,
+                        "tagFilterExpressionEnabled": False,
+                        "retriggerOpenAlertsEnabled": False
+                    }
+                    
+                    logger.info(f"Application maintenance window payload:")
+                    logger.info(f"  - Scope: Application Perspective")
+                    logger.info(f"  - Application ID: {app_id}")
+                    logger.info(f"  - Application Label: {app_label}")
+                    logger.info(f"  - Query: entity.application.id:\"{app_id}\"")
+                    logger.info(f"  - tagFilterExpression: None (disabled)")
+                    
+                except Exception as e:
+                    logger.error(f"Error looking up application ID: {e}")
+                    return {
+                        "error": f"Failed to lookup application: {str(e)}",
+                        "suggestion": "Check Instana API connectivity and permissions"
+                    }
             
             # Create maintenance window via Instana API
             # The API requires PUT with an ID in both the path and payload
@@ -847,7 +1194,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             logger.info(f"Window Name: {window_name}")
             logger.info(f"IMAP Code: {target_code}")
             logger.info(f"Scheduling Type: {scheduling_obj.get('type')}")
-            if scheduling_obj.get('type') == 'RECURRING':
+            if scheduling_obj.get('type') == 'RECURRENT':
                 logger.info(f"RRULE in payload: {scheduling_obj.get('rrule')}")
             logger.info(f"Start Time: {start_time} ({dt.fromtimestamp(start_time/1000).strftime('%Y-%m-%d %H:%M:%S UTC')})")
             logger.info(f"Duration: {duration_amount} {duration_unit}")
@@ -879,7 +1226,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     logger.error(f"  2. RRULE not supported by this Instana version")
                     logger.error(f"  3. Missing required fields in scheduling")
                     logger.error(f"  4. Invalid duration unit or amount")
-                    if scheduling_obj.get('type') == 'RECURRING':
+                    if scheduling_obj.get('type') == 'RECURRENT':
                         logger.error(f"  5. RRULE syntax error: {scheduling_obj.get('rrule')}")
                 
                 return result
@@ -893,11 +1240,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             response_type = response_scheduling.get("type", "UNKNOWN")
             logger.info(f"✅ Maintenance window created successfully")
             logger.info(f"Response scheduling type: {response_type}")
-            if response_type == "RECURRING":
+            if response_type == "RECURRENT":
                 response_rrule = response_scheduling.get("rrule", "NOT_FOUND")
                 logger.info(f"✅ RECURRING window confirmed in response")
                 logger.info(f"Response RRULE: {response_rrule}")
-            elif response_type == "ONE_TIME" and scheduling_obj.get('type') == 'RECURRING':
+            elif response_type == "ONE_TIME" and scheduling_obj.get('type') == 'RECURRENT':
                 logger.warning(f"⚠️ WARNING: Requested RECURRING but response shows ONE_TIME")
                 logger.warning(f"This may indicate the RRULE was not accepted by Instana API")
             logger.info(f"=== END MAINTENANCE WINDOW CREATION ===")
@@ -916,22 +1263,30 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
             start_dt = dt.fromtimestamp(start_time / 1000)
             end_dt = dt.fromtimestamp(end_time / 1000)
             
+            # Build response with application ID if available
+            response_details = {
+                "window_id": window_id,
+                "application": target_code,
+                "window_name": window_name,
+                "schedule": {
+                    "start": start_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "end": end_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "duration": f"{duration_amount} {duration_unit.lower()}"
+                },
+                "reason": reason or template_config.get("description", "Maintenance"),
+                "template_used": template or "none"
+            }
+            
+            # Add application ID if we looked it up (for application perspective windows)
+            if app_id:
+                response_details["application_id"] = app_id
+                response_details["application_label"] = app_label
+            
             return {
                 "operation": "create",
                 "status": "success",
                 "summary": f"✅ Maintenance window created successfully!",
-                "details": {
-                    "window_id": window_id,
-                    "application": target_code,
-                    "window_name": window_name,
-                    "schedule": {
-                        "start": start_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
-                        "end": end_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
-                        "duration": f"{duration_amount} {duration_unit.lower()}"
-                    },
-                    "reason": reason or template_config.get("description", "Maintenance"),
-                    "template_used": template or "none"
-                },
+                "details": response_details,
                 "next_steps": [
                     f"View in Instana UI: Settings → Maintenance Windows",
                     f"Window ID for reference: {window_id}",
@@ -941,6 +1296,7 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                 "raw_data": {
                     "window_id": window_id,
                     "imap_code": target_code,
+                    "application_id": app_id,
                     "start_time": start_time,
                     "end_time": end_time,
                     "duration_amount": duration_amount,
@@ -1591,6 +1947,11 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
                     tag_name=tag_name,
                     rrule=None,
                     until_date=None,
+                    apply_on_synthetic_tests=False,
+                    synthetic_test_names=None,
+                    synthetic_custom_property_key=None,
+                    synthetic_custom_property_value=None,
+                    synthetic_include_test_name_filter=False,
                     ctx=ctx
                 )
                 results.append({
@@ -1707,5 +2068,4 @@ class MaintenanceWindowMCPTools(BaseInstanaClient):
         except Exception as e:
             logger.error(f"ServiceNow update failed: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
-
 

@@ -1,0 +1,2 @@
+"""Maintenance window prompts."""
+
